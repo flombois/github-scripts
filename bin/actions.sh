@@ -20,6 +20,8 @@ Options:
                           queued or in progress.
       --format format     table (default), json or csv.
       --refresh           Fetch again instead of using the 5-minute cache.
+      --offline           Use the cache only, even past 5 minutes; never
+                          contact GitHub.
   -h, --help              Show this help.
 EOF
 }

@@ -115,6 +115,17 @@ Every table command takes `--format json` or `--format csv` to export the rows' 
 JSON, or CSV with a header row). Responses are cached for 5 minutes in `~/.cache/ghs`
 (`GHS_CACHE_TTL` sets the seconds), so reopening a view is quick; `--refresh` fetches again.
 
+Older answers stay in the cache for when GitHub can't be reached. If there's no network or GitHub
+is down, a view you've opened before shows its last answer, with a note on stderr saying how old it
+is. `--offline` (or `GHS_OFFLINE=1`) never contacts GitHub, and works out the repository from the
+git remote. Actions that change something are refused while offline. `GHS_CACHE_KEEP` sets how long
+answers are kept: a number of days (default 30), `forever`, or `never` to turn the fallback off.
+
+```sh
+ghs issues --offline
+GHS_CACHE_KEEP=forever ghs pr
+```
+
 To read one issue, put its number after `issues` (or `issue`), and likewise for a pull request
 after `pr`. `-c` adds the comments (and, for a pull request, the reviews):
 

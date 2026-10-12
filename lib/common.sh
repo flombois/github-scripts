@@ -20,15 +20,33 @@ require_count() {
 resolve_repo() {
   local repo="$1"
   if [[ -z "$repo" ]]; then
-    repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" \
-      || fail "no GitHub repository found in $(pwd); pass one with -R owner/repo"
+    repo="$(current_repo)" || fail "no GitHub repository found in $(pwd); pass one with -R owner/repo"
   fi
   repo="${repo#https://github.com/}"
+  repo="${repo#ssh://git@github.com/}"
   repo="${repo#*@github.com:}"
   repo="${repo%.git}"
   repo="${repo%/}"
   [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail "not a repository: $repo (expected owner/repo)"
   echo "$repo"
+}
+
+# The current directory's repository: gh asks GitHub, and the git remotes answer when it can't.
+current_repo() {
+  if ! is_offline && gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null; then
+    return
+  fi
+  local_repo
+}
+
+# The GitHub URL of the remote gh picked as the default, or of origin.
+local_repo() {
+  local remote url
+  remote="$(git config --get-regexp '^remote\..*\.gh-resolved$' 2>/dev/null \
+    | sed -E -n '1s/^remote\.(.*)\.gh-resolved .*/\1/p')"
+  url="$(git remote get-url "${remote:-origin}" 2>/dev/null)" || return
+  [[ "$url" =~ github\.com[:/] ]] || return
+  echo "$url"
 }
 
 # Renders the JSON on stdin; $1 is a jq program that ends in `| table` or prints its own lines,
@@ -94,13 +112,15 @@ format=table
 list_width=''
 
 # Usage: shared_option "$@"
-# Handles -i, --refresh, --format and the internal --list-width, setting `taken` to the number of
-# arguments used, or 0 when $1 is none of them.
+# Handles -i, --refresh, --offline, --format and the internal --list-width, setting `taken` to the
+# number of arguments used, or 0 when $1 is none of them. --offline is exported, so the fzf previews
+# and views it starts stay offline too.
 shared_option() {
   taken=1
   case "$1" in
     -i | --interactive) interactive=true ;;
     --refresh) refresh=true ;;
+    --offline) export GHS_OFFLINE=1 ;;
     --format) needs_value "$1" $#; format="$2"; taken=2 ;;
     --list-width) needs_value "$1" $#; list_width="$2"; taken=2 ;;
     *) taken=0 ;;
@@ -119,23 +139,114 @@ check_shared_options() {
 
 # Usage: cached_gh title gh-arguments…
 # Runs gh behind the spinner. Its output is kept for GHS_CACHE_TTL seconds (default 300) and reused
-# unless --refresh is given; failures are never kept.
+# unless --refresh is given; failures are never kept. When GitHub can't be reached, or with
+# --offline, an older answer is shown instead, up to GHS_CACHE_KEEP old.
 cached_gh() {
   local title="$1"
   shift
-  local dir file
-  dir="$(cache_dir)"
+  local file
   file="$(cache_file "$@")"
-  if [[ "$refresh" != true && -f "$file" ]] && [[ "$(file_age "$file")" -lt "${GHS_CACHE_TTL:-300}" ]]; then
+  if [[ "$refresh" != true && -f "$file" ]] && [[ "$(file_age "$file")" -lt "$(cache_ttl)" ]]; then
     cat "$file"
     return
   fi
-  local output
-  output="$(with_spinner "$title" gh "$@")" || return
-  if mkdir -p "$dir" 2>/dev/null && chmod 700 "$dir"; then
-    printf '%s\n' "$output" >"$file.$$" && mv "$file.$$" "$file"
+  if is_offline; then
+    serve_stale "$file" offline || fail "offline, and nothing is cached for this view; open it once online"
+    return
   fi
+  local errors output status=0
+  errors="$(mktemp)"
+  output="$(with_spinner "$title" sh -c 'exec gh "$@" 2>"$0"' "$errors" "$@")" || status=$?
+  if [[ "$status" -ne 0 ]] && is_unreachable "$errors" && serve_stale "$file" "GitHub is unreachable"; then
+    rm -f "$errors"
+    return
+  fi
+  cat "$errors" >&2
+  rm -f "$errors"
+  [[ "$status" -eq 0 ]] || return "$status"
+  store_cached "$file" "$output"
   printf '%s\n' "$output"
+}
+
+# True with --offline or GHS_OFFLINE=1.
+is_offline() {
+  [[ "${GHS_OFFLINE:-}" == 1 ]]
+}
+
+cache_ttl() {
+  echo "${GHS_CACHE_TTL:-300}"
+}
+
+# True when gh's error output says GitHub could not be reached, rather than refusing the request.
+is_unreachable() {
+  grep -qiE 'error connecting to|dial tcp|no such host|i/o timeout|connection refused' "$1" \
+    || grep -qiE 'network is unreachable|TLS handshake timeout|HTTP 5[0-9][0-9]' "$1"
+}
+
+# Usage: serve_stale file reason
+# Prints a cached answer no older than GHS_CACHE_KEEP, with a notice on stderr; fails when there is
+# none. fzf reloads (--list-width) get no notice, since it would be drawn over the list.
+serve_stale() {
+  local file="$1" reason="$2" age
+  [[ -f "$file" ]] || return 1
+  age="$(file_age "$file")"
+  [[ "$age" -lt "$(cache_keep_seconds)" ]] || return 1
+  if [[ -z "$list_width" ]]; then
+    local notice
+    notice="$(basename "$0" .sh): $reason; showing what was cached $(describe_age "$age") ago"
+    if [[ -t 2 ]]; then printf '\033[2m%s\033[0m\n' "$notice" >&2; else echo "$notice" >&2; fi
+  fi
+  cat "$file"
+}
+
+# How old a cached answer may be and still be shown when GitHub is out of reach.
+cache_keep_seconds() {
+  case "$(cache_keep)" in
+    never) cache_ttl ;;
+    forever) echo 9999999999 ;;
+    *) echo $(($(cache_keep) * 86400)) ;;
+  esac
+}
+
+# GHS_CACHE_KEEP: never, forever or a number of days (default 30).
+cache_keep() {
+  echo "${GHS_CACHE_KEEP:-30}"
+}
+
+check_cache_keep() {
+  [[ "$(cache_keep)" =~ ^(never|forever|[0-9]+)$ ]] \
+    || fail "GHS_CACHE_KEEP must be never, forever or a number of days, got: $(cache_keep)"
+}
+
+describe_age() {
+  local seconds="$1"
+  if [[ "$seconds" -lt 60 ]]; then
+    echo "$seconds s"
+  elif [[ "$seconds" -lt 3600 ]]; then
+    echo "$((seconds / 60)) min"
+  elif [[ "$seconds" -lt 172800 ]]; then
+    echo "$((seconds / 3600)) h"
+  else
+    echo "$((seconds / 86400)) days"
+  fi
+}
+
+# Usage: store_cached file output
+# Keeps the answer, then drops the answers older than GHS_CACHE_KEEP.
+store_cached() {
+  local dir
+  dir="$(cache_dir)"
+  mkdir -p "$dir" 2>/dev/null && chmod 700 "$dir" || return 0
+  printf '%s\n' "$2" >"$1.$$" && mv "$1.$$" "$1"
+  prune_cache "$dir"
+}
+
+prune_cache() {
+  case "$(cache_keep)" in
+    forever) ;;
+    never) find "$1" -name '*.json' -mmin "+$(($(cache_ttl) / 60))" -delete 2>/dev/null || true ;;
+    *) find "$1" -name '*.json' -mtime "+$(cache_keep)" -delete 2>/dev/null || true ;;
+  esac
 }
 
 cache_dir() {
@@ -272,6 +383,7 @@ browse_help() {
 watch_loop() {
   local seconds="$1" fetch="$2" draw="$3" active="$4" screen
   [[ -t 1 ]] || fail "--watch needs a terminal"
+  is_offline && fail "--watch needs GitHub; drop --offline"
   refresh=true
   trap 'printf "\033[?25h\n"; exit 130' INT
   printf '\033[?25l'
@@ -320,3 +432,5 @@ render_with() {
   jq -r --argjson isTerminal "$is_terminal" --argjson terminalWidth "$width" "$@" \
     "$(cat "$LIB_DIR/table.jq")"$'\n'"$program"
 }
+
+check_cache_keep

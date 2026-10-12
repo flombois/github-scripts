@@ -5,7 +5,7 @@ source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: notifications.sh [-R owner/repo] [-a] [-p] [-i] [--format f] [--refresh]
+Usage: notifications.sh [-R owner/repo] [-a] [-p] [-i] [--format f] [--refresh] [--offline]
 
 Prints your unread GitHub notifications (the 50 most recent) as a table,
 grouped by repository: review requests, mentions, assignments, CI runs...
@@ -18,6 +18,8 @@ Options:
   -i, --interactive       Browse them in fzf; alt-d marks one as read.
       --format format     table (default), json or csv.
       --refresh           Fetch again instead of using the 5-minute cache.
+      --offline           Use the cache only, even past 5 minutes; never
+                          contact GitHub.
   -h, --help              Show this help.
 EOF
 }

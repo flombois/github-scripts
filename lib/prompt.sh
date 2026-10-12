@@ -81,6 +81,7 @@ act() {
   local description="$1"
   shift
   clear_screen
+  refuse_offline && return 0
   confirm "$description?" || return 0
   "$@" || true
   pause
@@ -90,6 +91,14 @@ act() {
 # Runs a command that asks its own questions (gh's merge prompt, an editor), then pauses.
 interactive() {
   clear_screen
+  refuse_offline && return 0
   "$@" </dev/tty >/dev/tty || true
+  pause
+}
+
+# True, after saying so, when offline: changes need GitHub.
+refuse_offline() {
+  is_offline || return 1
+  printf 'Offline: nothing can be changed on GitHub.\n' >/dev/tty
   pause
 }

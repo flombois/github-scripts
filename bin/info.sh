@@ -6,7 +6,7 @@ source "$LIB_DIR/detail.sh"
 
 usage() {
   cat <<'EOF'
-Usage: info.sh [-R owner/repo] [--refresh]
+Usage: info.sh [-R owner/repo] [--refresh] [--offline]
 
 Prints an overview of a GitHub repository: its description and stats, recent
 merged pull requests and commits, the success rate of each workflow over the
@@ -16,6 +16,8 @@ Options:
   -R, --repo owner/repo   Repository to read; also accepts a GitHub URL.
                           Defaults to the repository of the current directory.
       --refresh           Fetch again instead of using the 5-minute cache.
+      --offline           Use the cache only, even past 5 minutes; never
+                          contact GitHub.
   -h, --help              Show this help.
 EOF
 }
@@ -26,6 +28,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -R | --repo) needs_value "$1" $#; repo="$2"; shift 2 ;;
     --refresh) refresh=true; shift ;;
+    --offline) export GHS_OFFLINE=1; shift ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; fail "unknown argument: $1" ;;
   esac

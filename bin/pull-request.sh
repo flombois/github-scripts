@@ -6,7 +6,7 @@ source "$LIB_DIR/detail.sh"
 
 usage() {
   cat <<'EOF'
-Usage: pull-request.sh <number> [-c] [-R owner/repo] [--watch [s]] [--refresh]
+Usage: pull-request.sh <number> [-c] [-R owner/repo] [--watch [s]] [--refresh] [--offline]
 
 Prints one pull request of a GitHub repository: its state, branches,
 reviewers, merge status, checks and changed files, then its description.
@@ -19,6 +19,8 @@ Options:
       --watch [seconds]   Show the checks and redraw them every few seconds
                           (default 5) until none is pending.
       --refresh           Fetch again instead of using the 5-minute cache.
+      --offline           Use the cache only, even past 5 minutes; never
+                          contact GitHub.
   -h, --help              Show this help.
 EOF
 }
@@ -33,6 +35,7 @@ while [[ $# -gt 0 ]]; do
     -c | --comments) show_comments=true; shift ;;
     -R | --repo) needs_value "$1" $#; repo="$2"; shift 2 ;;
     --refresh) refresh=true; shift ;;
+    --offline) export GHS_OFFLINE=1; shift ;;
     --watch) watch_option "$@"; shift "$taken" ;;
     -h | --help) usage; exit 0 ;;
     [0-9]* | '#'[0-9]*)

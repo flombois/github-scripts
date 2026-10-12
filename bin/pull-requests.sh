@@ -10,7 +10,7 @@ fi
 
 usage() {
   cat <<'EOF'
-Usage: pull-requests.sh [-R owner/repo] [-s state] [-L limit] [filters] [-i] [--format f] [--refresh]
+Usage: pull-requests.sh [-R owner/repo] [-s state] [-L limit] [filters] [-i] [--format f] [--refresh] [--offline]
        pull-requests.sh <number> [-c] [-R owner/repo]
 
 Prints the pull requests of a GitHub repository as a table. With a pull
@@ -30,6 +30,8 @@ Options:
   -i, --interactive         Browse the pull requests in fzf, with a preview pane.
       --format format       table (default), json or csv.
       --refresh             Fetch again instead of using the 5-minute cache.
+      --offline             Use the cache only, even past 5 minutes; never
+                            contact GitHub.
   -h, --help                Show this help.
 EOF
 }

@@ -12,7 +12,7 @@ esac
 
 usage() {
   cat <<'EOF'
-Usage: settings.sh [-R owner/repo] [-i] [--format f] [--refresh]
+Usage: settings.sh [-R owner/repo] [-i] [--format f] [--refresh] [--offline]
        settings.sh set <setting> <value> [-R owner/repo] [--yes]
        settings.sh rules|secrets|variables|labels [options]
 
@@ -44,6 +44,8 @@ Options:
   -i, --interactive       Browse the settings in fzf; Enter changes one.
       --format format     table (default), json or csv.
       --refresh           Fetch again instead of using the 5-minute cache.
+      --offline           Use the cache only, even past 5 minutes; never
+                          contact GitHub.
       --yes               Change the visibility without asking.
   -h, --help              Show this help.
 EOF

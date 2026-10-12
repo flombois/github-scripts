@@ -15,6 +15,11 @@ Every script in `bin/` has the same shape; copy an existing one:
 2. One `cached_gh "Loading …" <gh arguments>` call: gh behind a gum spinner, with its output cached
    for 5 minutes in `~/.cache/ghs`. Its JSON is captured into a variable, `|| fail "could not
    read …"`, so a `gh` error stops the script before jq runs.
+   - When gh's error says GitHub is unreachable (`is_unreachable`), or with `--offline`
+     (`GHS_OFFLINE=1`, exported so previews inherit it), `cached_gh` serves the older answer
+     (`serve_stale`), up to `GHS_CACHE_KEEP` old. The notice goes to stderr, so exports stay clean.
+   - Other errors (404, auth) still fail.
+   - Writes prune the cache. `act` and `interactive` refuse while offline.
 3. A jq `program` that builds `{title, subtitle, columns, rows, footer, empty}` and ends in `| table`,
    handed to `show_table <kind> "$program" --arg …`. That prints the table, the
    `--format json|csv` export, or the fzf browse; the kind picks the browse's title, keys and help
@@ -106,6 +111,10 @@ Table rules, all enforced by `lib/table.jq`:
   progress bars) with `| decor` so it is left out.
 
 ## Gotchas
+
+- To simulate an unreachable GitHub, run with `HTTPS_PROXY=http://127.0.0.1:9`. gh then fails with
+  `proxyconnect tcp: dial tcp …: connection refused`. Use a scratch `XDG_CACHE_HOME`, and backdate
+  cache files with `touch -t` to test `GHS_CACHE_KEEP`.
 
 - `tput cols` inside `$(…)` answers 80 whatever the terminal, since its stdout is a pipe.
   `terminal_width` asks `stty size </dev/tty` instead. In tests, set the width with `stty cols N`

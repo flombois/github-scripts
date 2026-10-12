@@ -5,7 +5,7 @@ source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../../lib/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: ghs settings rules [-R owner/repo] [-i] [--format f] [--refresh]
+Usage: ghs settings rules [-R owner/repo] [-i] [--format f] [--refresh] [--offline]
        ghs settings rules show <ruleset>
        ghs settings rules set <ruleset> active|evaluate|disabled
 
@@ -25,6 +25,8 @@ Options:
   -i, --interactive       Browse the rules in fzf; alt keys turn them on or off.
       --format format     table (default), json or csv.
       --refresh           Fetch again instead of using the 5-minute cache.
+      --offline           Use the cache only, even past 5 minutes; never
+                          contact GitHub.
   -h, --help              Show this help.
 EOF
 }

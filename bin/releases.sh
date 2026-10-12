@@ -5,7 +5,7 @@ source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: releases.sh [-R owner/repo] [-L limit] [-i] [--format f] [--refresh]
+Usage: releases.sh [-R owner/repo] [-L limit] [-i] [--format f] [--refresh] [--offline]
 
 Prints the releases of a GitHub repository as a table, newest first: tag,
 name, latest / pre-release / draft, author, assets and downloads.
@@ -17,6 +17,8 @@ Options:
   -i, --interactive       Browse the releases in fzf, with a preview pane.
       --format format     table (default), json or csv.
       --refresh           Fetch again instead of using the 5-minute cache.
+      --offline           Use the cache only, even past 5 minutes; never
+                          contact GitHub.
   -h, --help              Show this help.
 EOF
 }

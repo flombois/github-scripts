@@ -10,7 +10,7 @@ fi
 
 usage() {
   cat <<'EOF'
-Usage: issues.sh [-R owner/repo] [-s state] [filters] [-i] [--format f] [--refresh]
+Usage: issues.sh [-R owner/repo] [-s state] [filters] [-i] [--format f] [--refresh] [--offline]
        issues.sh <number> [-c] [-R owner/repo]
 
 Prints the open issues of a GitHub repository as a table, sub-issues nested
@@ -30,6 +30,8 @@ Options:
   -i, --interactive       Browse the issues in fzf, with a preview pane.
       --format format     table (default), json or csv.
       --refresh           Fetch again instead of using the 5-minute cache.
+      --offline           Use the cache only, even past 5 minutes; never
+                          contact GitHub.
   -h, --help              Show this help.
 
 Filters go through GitHub search, which returns at most 1000 issues.
