@@ -1,0 +1,10 @@
+# JetBrains IDEs
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Local environment
+.env
+.env.*
