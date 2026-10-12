@@ -21,6 +21,8 @@ Every script in `bin/` has the same shape; copy an existing one:
    - Each row carries `_key: [kind, repo, id]`. In the fzf list these are hidden tab-separated
      fields, which `lib/browse.sh <action> kind repo id extra` uses for the preview, Enter and
      ctrl-o.
+   - `inbox.sh` rows name their own kind: `pr`, `issue`, or `link` (the id is a URL, opened in the
+     browser), with the notification thread id as the extra field.
    - The alt-key actions are `kind:action` cases in `browse.sh`, bound in `browse()`
      (`key_actions`). Changes go through `act` (clear the screen, confirm with gum or y/N on
      `/dev/tty`, run, pause). Commands that prompt themselves go through `interactive`.

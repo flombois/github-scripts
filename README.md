@@ -81,6 +81,7 @@ ghs <command> [options]
 | `pull-requests` | `pr`     | Pull requests with review decision, check results and size              |
 | `pull-request`  | —        | One pull request: reviewers, merge status, checks, files and comments   |
 | `pipeline-runs` | `runs`   | Recent GitHub Actions runs with outcome, duration and success rate      |
+| `inbox`         | `notifications` | Your unread notifications across repositories, with type and reason |
 
 Every command reads the repository of the current directory, or the one given with `-R`:
 
@@ -137,6 +138,10 @@ first:
 | issues   | alt-a assign to me · alt-c comment · alt-x close |
 | pr       | alt-k check out (in a clone of the repository) · alt-a approve · alt-m merge (gh asks how) · alt-c comment |
 | runs     | alt-r re-run failed jobs · alt-l failed logs · alt-w watch |
+| inbox    | alt-d mark as read (Enter shows a pull request or issue; other threads open in the browser) |
+
+`ghs inbox` reads your notifications from every repository (`-R` for one, `-a` to include read
+ones, `-p` for threads you take part in), so it needs no repository.
 
 ```sh
 ghs issues -i

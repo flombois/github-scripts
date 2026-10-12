@@ -7,6 +7,7 @@ action="$1"
 kind="$2"
 repo="$3"
 id="$4"
+extra="${5:-}"
 BIN_DIR="$LIB_DIR/../bin"
 
 # Shows the item in the preview pane, which is a pipe: our views are told it is a terminal.
@@ -15,6 +16,7 @@ preview() {
     issue) GHS_FORCE_TERMINAL=1 COLUMNS="$FZF_PREVIEW_COLUMNS" "$BIN_DIR/issue.sh" "$id" -R "$repo" ;;
     pr) GHS_FORCE_TERMINAL=1 COLUMNS="$FZF_PREVIEW_COLUMNS" "$BIN_DIR/pull-request.sh" "$id" -R "$repo" ;;
     run) GH_FORCE_TTY="$FZF_PREVIEW_COLUMNS" gh run view "$id" -R "$repo" ;;
+    link) printf '%s\n\n%s\n' "Enter or ctrl-o opens it in the browser:" "$id" ;;
   esac
 }
 
@@ -23,6 +25,7 @@ view() {
     issue) "$BIN_DIR/issue.sh" "$id" -c -R "$repo" ;;
     pr) "$BIN_DIR/pull-request.sh" "$id" -c -R "$repo" ;;
     run) GH_FORCE_TTY=100% gh run view "$id" --verbose -R "$repo" | less -RF ;;
+    link) open_url "$id" ;;
   esac
 }
 
@@ -31,7 +34,16 @@ open_in_browser() {
     issue) gh issue view "$id" -R "$repo" --web ;;
     pr) gh pr view "$id" -R "$repo" --web ;;
     run) gh run view "$id" -R "$repo" --web ;;
+    link) open_url "$id" ;;
   esac
+}
+
+open_url() {
+  if command -v open >/dev/null && [[ "$(uname)" == Darwin ]]; then
+    open "$1"
+  else
+    xdg-open "$1" >/dev/null 2>&1
+  fi
 }
 
 # fzf hands the terminal over without clearing it.
@@ -104,5 +116,6 @@ case "$kind:$action" in
   run:rerun) act "Re-run the failed jobs of run $id" gh run rerun "$id" -R "$repo" --failed ;;
   run:logs) gh run view "$id" -R "$repo" --log-failed | less -RF ;;
   run:watch) interactive gh run watch "$id" -R "$repo" ;;
+  *:read) gh api -X PATCH "notifications/threads/$extra" --silent ;;
   *) fail "no $action action for a $kind" ;;
 esac
