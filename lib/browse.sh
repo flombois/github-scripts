@@ -17,6 +17,7 @@ preview() {
     pr) GHS_FORCE_TERMINAL=1 COLUMNS="$FZF_PREVIEW_COLUMNS" "$BIN_DIR/pull-request.sh" "$id" -R "$repo" ;;
     run) GH_FORCE_TTY="$FZF_PREVIEW_COLUMNS" gh run view "$id" -R "$repo" ;;
     link) printf '%s\n\n%s\n' "Enter or ctrl-o opens it in the browser:" "$id" ;;
+    release) GH_FORCE_TTY="$FZF_PREVIEW_COLUMNS" gh release view "$id" -R "$repo" ;;
   esac
 }
 
@@ -26,6 +27,7 @@ view() {
     pr) "$BIN_DIR/pull-request.sh" "$id" -c -R "$repo" ;;
     run) GH_FORCE_TTY=100% gh run view "$id" --verbose -R "$repo" | less -RF ;;
     link) open_url "$id" ;;
+    release) GH_FORCE_TTY=100% gh release view "$id" -R "$repo" | less -RF ;;
   esac
 }
 
@@ -34,6 +36,7 @@ open_in_browser() {
     issue) gh issue view "$id" -R "$repo" --web ;;
     pr) gh pr view "$id" -R "$repo" --web ;;
     run) gh run view "$id" -R "$repo" --web ;;
+    release) gh release view "$id" -R "$repo" --web ;;
     link) open_url "$id" ;;
   esac
 }

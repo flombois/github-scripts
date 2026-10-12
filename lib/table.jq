@@ -66,7 +66,10 @@ def linkTo($url): map(.link = $url);
 # Decoration, such as the backlog's tree lines, that --format json and csv leave out.
 def decor: map(.decor = true);
 def cellText: map(select(.decor | not) | .text) | join("") | sub("^ +"; "") | sub(" +$"; "");
-def profileUrl: if startswith("app/") then "https://github.com/apps/\(.[4:])" else "https://github.com/\(.)" end;
+def profileUrl:
+  if startswith("app/") then "https://github.com/apps/\(.[4:])"
+  elif endswith("[bot]") then "https://github.com/apps/\(rtrimstr("[bot]"))"
+  else "https://github.com/\(.)" end;
 def cellWidth: map(.text | textWidth) | add // 0;
 def joinCells($separator): reduce .[] as $cell ([]; if . == [] then $cell else . + $separator + $cell end);
 def renderInline: map(.style as $style | .link as $url | .text | paint($style) | hyperlink($url)) | join("");
@@ -116,6 +119,12 @@ def generatedAt: now | strflocaltime("%Y-%m-%d %H:%M");
 # A footer entry such as "3 drafts", left out when the count is zero.
 def tally($label; $style): if . > 0 then "\(.) \($label)" | cell($style) else empty end;
 
+
+# 12345 as 12.3k, 5600000 as 5.6M; below 10000 as is.
+def compactNumber:
+  if . >= 1000000 then "\(. / 100000 | floor / 10)M"
+  elif . >= 10000 then "\(. / 100 | floor / 10)k"
+  else "\(.)" end;
 
 def plural($word): if . == 1 then "1 \($word)" else "\(.) \($word)s" end;
 

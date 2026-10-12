@@ -217,6 +217,7 @@ browse_title() {
     pr) echo "Pull requests · $repo" ;;
     run) echo "Pipeline runs · $repo" ;;
     inbox) echo "Inbox${repo:+ · $repo}" ;;
+    release) echo "Releases · $repo" ;;
   esac
 }
 

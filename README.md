@@ -82,6 +82,8 @@ ghs <command> [options]
 | `pull-request`  | —        | One pull request: reviewers, merge status, checks, files and comments   |
 | `pipeline-runs` | `runs`   | Recent GitHub Actions runs with outcome, duration and success rate      |
 | `inbox`         | `notifications` | Your unread notifications across repositories, with type and reason |
+| `releases`      | —        | Releases with latest / pre-release / draft status, assets and downloads |
+| `repo`          | —        | Overview: stats, recent merges and commits, CI health per workflow, latest release, top contributors |
 
 Every command reads the repository of the current directory, or the one given with `-R`:
 

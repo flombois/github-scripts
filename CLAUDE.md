@@ -47,6 +47,10 @@ pass the Markdown to glow 3 (`render_markdown`) and `page` the whole view throug
 - **Sidebar:** with glow and 110+ columns, `--arg layout sidebar` moves the fields into a
   GitHub-style sidebar. The cards render at the narrower main width, and `beside_program` pads each
   line to it and appends a sidebar line.
+- `repo.sh` reuses `detail.sh` without a sidebar. Its `left` and `right` parts are columns of
+  `framedCard`s, put side by side with `beside_program` from 120 columns. It merges three fetches:
+  GraphQL, `gh run list` and contributors, the last two passed as `--argjson runs` and
+  `contributors`.
 - `pull-request.sh` follows the same pattern. `checks` and `files` are cards drawn in jq
   (`framedCard`). With `-c`, its `timeline` interleaves comments and reviews, and each entry becomes
   a card (`entryTitle` + `entry`). `checkOutcome` and `checksCell` live in `table.jq`, shared with the
