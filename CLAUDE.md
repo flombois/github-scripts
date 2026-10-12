@@ -34,6 +34,9 @@ Table rules, all enforced by `lib/table.jq`:
   join cells with `+`. A style is an ANSI SGR code from the named defs (`bold`, `dim`, `red`, …,
   `hexColor` for GitHub label hex, `namedColor` for issue-type enum colours).
 - Colour goes through `paint` only, which is a no-op off a terminal, so piped output stays plain.
+- `cell | linkTo($url)` makes a segment an OSC 8 hyperlink, emitted by `renderInline` on a terminal
+  only. The link lives beside the text, so widths and clipping are unaffected; bind the URL first,
+  since `linkTo`'s argument is evaluated against the cell.
 - One column per table is `flex: true`; on a terminal it stretches to fill the width. `max: N` marks a
   column that may be clipped: to N when room is short, down to 12 before the table overflows, and
   not at all when there is room. Clipping is done by the table, so cells carry full text.

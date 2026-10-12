@@ -58,26 +58,30 @@ def typeCell:
   if .issueType == null then "—" | cell(dim)
   else .issueType as $type | $type.name | cell($type.color | namedColor) end;
 
+def labelUrl: "https://github.com/\($repo)/labels/\(@uri)";
+
 def labelsCell:
-  [.labels.nodes[] | .color as $color | ("●" | cell($color | hexColor)) + (" \(.name)" | cell(""))]
+  [.labels.nodes[] | .color as $color | (.name | labelUrl) as $url
+   | ("●" | cell($color | hexColor)) + (" \(.name)" | cell("")) | linkTo($url)]
   | joinCells("  " | cell(""));
 
 def assigneesCell:
-  [.assignees.nodes[].login | "@" + .]
-  | if length > 0 then join(" ") | cell(magenta) else "—" | cell(dim) end;
+  [.assignees.nodes[].login | profileUrl as $profile | "@\(.)" | cell(magenta) | linkTo($profile)]
+  | if length > 0 then joinCells(" " | cell("")) else "—" | cell(dim) end;
 
 def progressCell:
   .subIssuesSummary as $summary
   | if $summary.total == 0 then [] else progressBar($summary.completed; $summary.total) end;
 
 def row($branch):
-  {number: ("#\(.number)" | cell(bold)),
-   type: typeCell,
-   title: (($branch | cell(dim)) + (.title | cell(""))),
-   labels: labelsCell,
-   assignees: assigneesCell,
-   progress: progressCell,
-   updated: (.updatedAt | ago | cell(dim))};
+  "https://github.com/\($repo)/issues/\(.number)" as $url
+  | {number: ("#\(.number)" | cell(bold) | linkTo($url)),
+    type: typeCell,
+    title: (($branch | cell(dim)) + (.title | cell("") | linkTo($url))),
+    labels: labelsCell,
+    assignees: assigneesCell,
+    progress: progressCell,
+    updated: (.updatedAt | ago | cell(dim))};
 
 [.[].data.repository.issues.nodes[]] as $issues
 | def children($number): $issues | map(select(.parent.number == $number)) | sort_by(.number);
@@ -88,7 +92,7 @@ def row($branch):
     | ($kids[$index] | row($prefix + (if $isLast then "└─ " else "├─ " end))),
       ($kids[$index] | subtree($prefix + (if $isLast then "   " else "│  " end)));
   {
-    title: (("Backlog" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan))),
+    title: (("Backlog" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan) | linkTo("https://github.com/\($repo)"))),
     subtitle: ("\($issues | length) open · \(generatedAt)" | cell(dim)),
     columns: [
       {key: "number", header: "#", align: "right"},

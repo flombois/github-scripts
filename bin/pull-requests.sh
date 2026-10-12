@@ -76,20 +76,21 @@ def checksCell:
 def sizeCell: ("+\(.additions)" | cell(green)) + (" -\(.deletions)" | cell(red));
 
 def row:
-  {number: ("#\(.number)" | cell(bold)),
-   state: stateCell,
-   title: titleCell,
-   author: ("@\(.author.login)" | cell(magenta)),
-   branch: branchCell,
-   review: reviewCell,
-   checks: checksCell,
-   size: sizeCell,
-   updated: (.updatedAt | ago | cell(dim))};
+  "https://github.com/\($repo)/pull/\(.number)" as $url
+  | {number: ("#\(.number)" | cell(bold) | linkTo($url)),
+    state: stateCell,
+    title: (titleCell | linkTo($url)),
+    author: (.author.login | profileUrl as $profile | "@\(.)" | cell(magenta) | linkTo($profile)),
+    branch: branchCell,
+    review: reviewCell,
+    checks: checksCell,
+    size: sizeCell,
+    updated: (.updatedAt | ago | cell(dim))};
 
 . as $pulls
 | (if $state == "all" then "" else $state + " " end) as $qualifier
 | {
-    title: (("Pull requests" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan))),
+    title: (("Pull requests" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan) | linkTo("https://github.com/\($repo)"))),
     subtitle: ("\($pulls | length) \($qualifier)shown"
                + (if ($pulls | length) == $limit then " (limit reached, raise it with -L)" else "" end)
                + " · \(generatedAt)" | cell(dim)),

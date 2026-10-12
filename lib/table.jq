@@ -1,5 +1,5 @@
 # Shared rendering for the report scripts; expects $isTerminal and $terminalWidth.
-# A cell is an array of {text, style} segments, where a style is an ANSI SGR code.
+# A cell is an array of {text, style, link?} segments, where a style is an ANSI SGR code.
 
 def bold: "1";
 def dim: "2";
@@ -25,10 +25,16 @@ def times($count): if $count > 0 then . * $count else "" end;
 def paint($style):
   if $isTerminal and $style != "" and . != "" then "\u001b[\($style)m\(.)\u001b[0m" else . end;
 
+# An OSC 8 hyperlink, which terminals make clickable; a no-op off a terminal, like paint.
+def hyperlink($url):
+  if $isTerminal and $url != null and . != "" then "\u001b]8;;\($url)\u0007\(.)\u001b]8;;\u0007" else . end;
+
 def cell($style): [{text: ., style: $style}];
+def linkTo($url): map(.link = $url);
+def profileUrl: if startswith("app/") then "https://github.com/apps/\(.[4:])" else "https://github.com/\(.)" end;
 def cellWidth: map(.text | length) | add // 0;
 def joinCells($separator): reduce .[] as $cell ([]; if . == [] then $cell else . + $separator + $cell end);
-def renderInline: map(.style as $style | .text | paint($style)) | join("");
+def renderInline: map(.style as $style | .link as $url | .text | paint($style) | hyperlink($url)) | join("");
 
 # Packs cells into as few lines as fit $width, joined by $separator.
 def wrapCells($width; $separator):

@@ -56,10 +56,12 @@ def typeCell:
   if .issueType == null then empty
   else .issueType as $type | $type.name | cell($type.color | namedColor) end;
 
+def personCell: profileUrl as $profile | "@\(.)" | cell(magenta) | linkTo($profile);
+
 def statusLine:
   [stateCell,
    (if $layout == "sidebar" then empty else typeCell end),
-   ("@\(.author.login // "ghost")" | cell(magenta)) + (" opened \(.createdAt | ago)" | cell(dim)),
+   (.author.login // "ghost" | personCell) + (" opened \(.createdAt | ago)" | cell(dim)),
    (if .state == "OPEN" then "updated \(.updatedAt | ago)" else "closed \(.closedAt // .updatedAt | ago)" end
     | cell(dim)),
    (.comments | length | plural("comment") | cell(dim))]
@@ -69,15 +71,18 @@ def field($label; $value):
   ($label | 12 - length) as $gap
   | ($label + (" " | times($gap)) | cell(dim)) + $value;
 
-def labelCells: [.labels[] | .color as $color | ("●" | cell($color | hexColor)) + (" \(.name)" | cell(""))];
+def labelCells:
+  (.url | sub("/issues/[0-9]+$"; "/labels/")) as $labelsUrl
+  | [.labels[] | .color as $color | "\($labelsUrl)\(.name | @uri)" as $url
+     | ("●" | cell($color | hexColor)) + (" \(.name)" | cell("")) | linkTo($url)];
 
 def labelsCell: labelCells | if . == [] then "—" | cell(dim) else joinCells("  " | cell("")) end;
 
 def assigneesCell:
-  [.assignees[].login | "@" + .]
-  | if length > 0 then join(" ") | cell(magenta) else "—" | cell(dim) end;
+  [.assignees[].login | personCell]
+  | if length > 0 then joinCells(" " | cell("")) else "—" | cell(dim) end;
 
-def issueRef: ("#\(.number)" | cell(bold)) + (" \(.title)" | cell(""));
+def issueRef: .url as $url | ("#\(.number)" | cell(bold)) + (" \(.title)" | cell("")) | linkTo($url);
 
 def subIssueLine:
   (if .state == "CLOSED" then "✓ " | cell(green) else "○ " | cell(dim) end) + issueRef;
@@ -105,7 +110,7 @@ def orNone($placeholder): if . == [] then [$placeholder | cell(dim)] else . end;
 def sidebarSection($title; $cells): [($title | paint(bold)), ($cells[] | clipCell($terminalWidth) | renderInline)];
 
 def sidebar:
-  [sidebarSection("Assignees"; [.assignees[].login | "@" + . | cell(magenta)] | orNone("No one assigned")),
+  [sidebarSection("Assignees"; [.assignees[].login | personCell] | orNone("No one assigned")),
    sidebarSection("Labels"; labelCells | orNone("No labels")),
    sidebarSection("Type"; [typeCell] | orNone("No type")),
    sidebarSection("Milestone"; [.milestone // empty | .title | cell("")] | orNone("No milestone")),
@@ -125,7 +130,8 @@ def rule: " " + ("─" | times(if $isTerminal then $terminalWidth - 2 else 100 e
 def hiddenReason: "(hidden: \(.minimizedReason | ascii_downcase))";
 
 def commentLines:
-  " " + (("@\(.author.login // "ghost")" | cell(bold)) + (" · \(.createdAt | ago)" | cell(dim)) | renderInline),
+  " " + ((.author.login // "ghost" | profileUrl as $profile | "@\(.)" | cell(bold) | linkTo($profile))
+         + (" · \(.createdAt | ago)" | cell(dim)) | renderInline),
   (if .isMinimized then "    " + (hiddenReason | paint(dim)) else .body | textLines("    ") end),
   "";
 
@@ -138,7 +144,8 @@ def showsComments: $showComments and (.comments | length) > 0;
 # The parts are printed one by one so the shell can pass the Markdown ones to glow.
 if $part == "header" then
   "",
-  " " + (("#\(.number)" | cell(bold)) + ("  " | cell("")) + (.title | cell(bold)) | renderInline),
+  " " + (.url as $url | ("#\(.number)" | cell(bold)) + ("  " | cell("")) + (.title | cell(bold)) | linkTo($url)
+         | renderInline),
   " " + (statusLine | renderInline),
   "",
   (if $layout == "sidebar" then empty else fields | " " + renderInline end),
@@ -160,7 +167,7 @@ elif $part == "comments" then
   elif $markdown then [.comments[] | commentMarkdown] | join("\n\n---\n\n")
   else "", (.comments[] | commentLines) end
 else
-  " " + (.url | paint(dim)),
+  " " + (.url as $url | $url | cell(dim) | linkTo($url) | renderInline),
   ""
 end
 '

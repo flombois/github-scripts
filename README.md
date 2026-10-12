@@ -106,8 +106,10 @@ on the right, as on GitHub. Piped output keeps the raw Markdown.
 - `ghs <command> --help` (or `ghs help <command>`) lists the options of a command.
 
 Every view fills the terminal width: the title column of a table stretches, and narrow terminals
-clip the longest columns first (override the width with `COLUMNS=120`). Piped output has no colours
-and no clipping.
+clip the longest columns first (override the width with `COLUMNS=120`). Issue and PR numbers,
+titles, runs, people, labels and the repository are clickable links in terminals that support them
+(iTerm2, kitty, WezTerm, GNOME Terminal, Windows Terminal…). Piped output has no colours, links or
+clipping.
 
 ## Layout
 

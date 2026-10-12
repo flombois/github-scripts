@@ -63,21 +63,22 @@ def durationCell:
   else "—" | cell(dim) end;
 
 def row:
-  {id: ("\(.databaseId)" | cell(dim)),
-   status: statusCell,
-   workflow: (if .workflowName == "" then .name else .workflowName end | cell(bold)),
-   title: titleCell,
-   branch: (.headBranch | cell(cyan)),
-   event: (.event | cell(dim)),
-   duration: durationCell,
-   started: (.createdAt | ago | cell(dim))};
+  "https://github.com/\($repo)/actions/runs/\(.databaseId)" as $url
+  | {id: ("\(.databaseId)" | cell(dim) | linkTo($url)),
+    status: statusCell,
+    workflow: (if .workflowName == "" then .name else .workflowName end | cell(bold)),
+    title: (titleCell | linkTo($url)),
+    branch: (.headBranch | cell(cyan)),
+    event: (.event | cell(dim)),
+    duration: durationCell,
+    started: (.createdAt | ago | cell(dim))};
 
 . as $runs
 | ($runs | map(select(.status == "completed" and .conclusion != "skipped" and .conclusion != "cancelled"))) as $finished
 | ([if $branch == "" then empty else "branch \($branch)" end,
     if $workflow == "" then empty else "workflow \($workflow)" end] | join(" · ")) as $filters
 | {
-    title: (("Pipeline runs" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan))),
+    title: (("Pipeline runs" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan) | linkTo("https://github.com/\($repo)"))),
     subtitle: ("last \($runs | length | plural("run"))"
                + (if $filters == "" then "" else " · \($filters)" end)
                + " · \(generatedAt)" | cell(dim)),
