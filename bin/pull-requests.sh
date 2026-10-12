@@ -5,7 +5,7 @@ source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: pull-requests.sh [-R owner/repo] [-s state] [-L limit]
+Usage: pull-requests.sh [-R owner/repo] [-s state] [-L limit] [-i]
 
 Prints the pull requests of a GitHub repository as a table.
 
@@ -14,11 +14,13 @@ Options:
                           Defaults to the repository of the current directory.
   -s, --state state       open (default), closed, merged or all.
   -L, --limit count       Most recent pull requests to show (default 30).
+  -i, --interactive       Browse the pull requests in fzf, with a preview pane.
   -h, --help              Show this help.
 EOF
 }
 
 repo=''
+interactive=false
 state='open'
 limit=30
 while [[ $# -gt 0 ]]; do
@@ -27,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     -R | --repo) needs_value "$1" $#; repo="$2"; shift 2 ;;
     -s | --state) needs_value "$1" $#; state="$2"; shift 2 ;;
     -L | --limit) needs_value "$1" $#; limit="$2"; shift 2 ;;
+    -i | --interactive) interactive=true; shift ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; fail "unknown argument: $1" ;;
   esac
@@ -34,6 +37,7 @@ done
 [[ "$state" =~ ^(open|closed|merged|all)$ ]] || fail "state must be open, closed, merged or all, got: $state"
 require_count --limit "$limit"
 repo="$(resolve_repo "$repo")"
+if [[ "$interactive" == true ]]; then check_browse; fi
 
 program='
 def stateCell:
@@ -99,11 +103,11 @@ def row:
       (if $state == "open" then empty else {key: "state", header: "STATE"} end),
       {key: "title", header: "TITLE", flex: true},
       {key: "author", header: "AUTHOR"},
-      {key: "branch", header: "BRANCH", max: 36},
+      {key: "branch", header: "BRANCH", max: 36, drop: true},
       {key: "review", header: "REVIEW"},
       {key: "checks", header: "CHECKS"},
-      {key: "size", header: "SIZE"},
-      {key: "updated", header: "UPDATED"}
+      {key: "size", header: "SIZE", drop: true},
+      {key: "updated", header: "UPDATED", drop: true}
     ],
     rows: [$pulls | sort_by(-.number)[] | row],
     footer: [
@@ -123,8 +127,13 @@ def row:
 | table
 '
 
-pulls="$(gh pr list -R "$repo" --state "$state" --limit "$limit" --json \
+pulls="$(with_spinner "Loading the pull requests of ${repo}…" gh pr list -R "$repo" --state "$state" --limit "$limit" --json \
   number,title,state,isDraft,author,headRefName,baseRefName,reviewDecision,statusCheckRollup,additions,deletions,updatedAt)" \
   || fail "could not read the pull requests of $repo"
 
-render_table "$program" --arg repo "$repo" --arg state "$state" --argjson limit "$limit" <<<"$pulls"
+if [[ "$interactive" == true ]]; then
+  browse pr "$repo" "Pull requests · $repo" "$program" \
+    --arg repo "$repo" --arg state "$state" --argjson limit "$limit" <<<"$pulls"
+else
+  render_table "$program" --arg repo "$repo" --arg state "$state" --argjson limit "$limit" <<<"$pulls"
+fi

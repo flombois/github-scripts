@@ -5,7 +5,7 @@ source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: pipeline-runs.sh [-R owner/repo] [-b branch] [-w workflow] [-L limit]
+Usage: pipeline-runs.sh [-R owner/repo] [-b branch] [-w workflow] [-L limit] [-i]
 
 Prints the recent GitHub Actions runs of a repository as a table.
 
@@ -15,11 +15,13 @@ Options:
   -b, --branch branch     Only runs on this branch.
   -w, --workflow name     Only runs of this workflow (name or file name).
   -L, --limit count       Most recent runs to show (default 20).
+  -i, --interactive       Browse the runs in fzf, with a preview pane.
   -h, --help              Show this help.
 EOF
 }
 
 repo=''
+interactive=false
 branch=''
 workflow=''
 limit=20
@@ -30,12 +32,14 @@ while [[ $# -gt 0 ]]; do
     -b | --branch) needs_value "$1" $#; branch="$2"; shift 2 ;;
     -w | --workflow) needs_value "$1" $#; workflow="$2"; shift 2 ;;
     -L | --limit) needs_value "$1" $#; limit="$2"; shift 2 ;;
+    -i | --interactive) interactive=true; shift ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; fail "unknown argument: $1" ;;
   esac
 done
 require_count --limit "$limit"
 repo="$(resolve_repo "$repo")"
+if [[ "$interactive" == true ]]; then check_browse; fi
 
 program='
 def outcome:
@@ -88,9 +92,9 @@ def row:
       {key: "workflow", header: "WORKFLOW", max: 28},
       {key: "title", header: "TITLE", flex: true},
       {key: "branch", header: "BRANCH", max: 28},
-      {key: "event", header: "EVENT"},
-      {key: "duration", header: "DURATION", align: "right"},
-      {key: "started", header: "STARTED"}
+      {key: "event", header: "EVENT", drop: true},
+      {key: "duration", header: "DURATION", align: "right", drop: true},
+      {key: "started", header: "STARTED", drop: true}
     ],
     rows: [$runs[] | row],
     footer: [
@@ -110,8 +114,13 @@ filters=()
 if [[ -n "$branch" ]]; then filters+=(--branch "$branch"); fi
 if [[ -n "$workflow" ]]; then filters+=(--workflow "$workflow"); fi
 
-runs="$(gh run list -R "$repo" --limit "$limit" ${filters[@]+"${filters[@]}"} --json \
+runs="$(with_spinner "Loading the workflow runs of ${repo}…" gh run list -R "$repo" --limit "$limit" ${filters[@]+"${filters[@]}"} --json \
   databaseId,status,conclusion,name,workflowName,displayTitle,headBranch,event,createdAt,startedAt,updatedAt,attempt)" \
   || fail "could not read the workflow runs of $repo"
 
-render_table "$program" --arg repo "$repo" --arg branch "$branch" --arg workflow "$workflow" <<<"$runs"
+if [[ "$interactive" == true ]]; then
+  browse run "$repo" "Pipeline runs · $repo" "$program" \
+    --arg repo "$repo" --arg branch "$branch" --arg workflow "$workflow" <<<"$runs"
+else
+  render_table "$program" --arg repo "$repo" --arg branch "$branch" --arg workflow "$workflow" <<<"$runs"
+fi

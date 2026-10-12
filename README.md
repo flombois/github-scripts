@@ -16,6 +16,8 @@ ghs runs -b main -w CI     # recent GitHub Actions runs with outcome and duratio
 - bash 3.2 or later
 - optional: [`glow`](https://github.com/charmbracelet/glow) 3 or later, to render issue descriptions and
   comments as Markdown
+- optional: [`gum`](https://github.com/charmbracelet/gum), for a spinner while `gh` loads
+- optional: [`fzf`](https://github.com/junegunn/fzf) 0.42 or later, to browse with `-i`
 
 ## Install
 
@@ -31,8 +33,8 @@ The installer works on macOS and Linux and reports each step:
    apk or Homebrew on Linux).
 2. **Requirements**: checks `gh` and `jq` (1.7 or later). For each missing or outdated one it shows
    the install command and asks before running it. It also offers `gh auth login` if you are not
-   logged in. glow is optional: the installer offers it through
-   Homebrew, and elsewhere prints where to get it (Linux distributions package only glow 2 so far).
+   logged in. glow, gum and fzf are optional: the installer offers them through
+   Homebrew, and elsewhere prints where to get them (Linux distributions package only glow 2 so far).
 3. **Commands**: links `github-scripts` and its short name `ghs` into `~/.local/bin`, pointing at the
    clone. If that directory is not on your `PATH`, it prints the line to add to your shell profile.
 
@@ -102,14 +104,25 @@ description and comments are rendered as Markdown (set `GLAMOUR_STYLE=light` on 
 on a terminal 110 columns or wider the assignees, labels, type, milestone and parent move to a sidebar
 on the right, as on GitHub. Piped output keeps the raw Markdown.
 
+To browse instead, add `-i` to `issues`, `pr` or `runs` (needs fzf). Type to filter the list; the
+issue, pull request or run under the cursor shows in a preview pane (beside the list from 160
+columns, below it otherwise). Enter opens it in full, ctrl-o opens it in the browser, Esc quits.
+
+```sh
+ghs issues -i
+ghs pr -s all -i
+```
+
 - `ghs --help` lists the commands.
 - `ghs <command> --help` (or `ghs help <command>`) lists the options of a command.
 
-Every view fills the terminal width: the title column of a table stretches, and narrow terminals
-clip the longest columns first (override the width with `COLUMNS=120`). Issue and PR numbers,
+On a terminal, tables and issues are drawn in rounded frames, and each issue's description and
+comments are cards, as on GitHub. Every view fills the terminal width: the title column of a table
+stretches, and narrow terminals clip the longest columns first, then leave out the least useful
+ones (override the width with `COLUMNS=120`). Issue and PR numbers,
 titles, runs, people, labels and the repository are clickable links in terminals that support them
-(iTerm2, kitty, WezTerm, GNOME Terminal, Windows Terminal…). Piped output has no colours, links or
-clipping.
+(iTerm2, kitty, WezTerm, GNOME Terminal, Windows Terminal…). Piped output has no colours, links,
+frames, spinner or clipping.
 
 ## Layout
 
@@ -117,7 +130,9 @@ clipping.
 - `install.sh`, `uninstall.sh` — add and remove the `github-scripts` and `ghs` links
 - `bin/` — one script per command: options, the `gh` query, and the columns of its table (`issue.sh`
   prints one issue instead of a table)
-- `lib/common.sh` — option helpers, repository detection, the `jq` call, paging and glow
+- `lib/common.sh` — option helpers, repository detection, the `jq` call, paging, glow, the gum
+  spinner and the fzf browse
 - `lib/install.sh` — link names and output helpers shared by the installer and uninstaller
 - `lib/packages.sh` — platform detection, requirement checks and package installs for the installer
-- `lib/table.jq` — table rendering shared by every command; a cell is a list of `{text, style}` segments
+- `lib/table.jq` — table rendering and frames shared by every command; a cell is a list of
+  `{text, style, link}` segments

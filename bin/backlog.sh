@@ -10,7 +10,7 @@ fi
 
 usage() {
   cat <<'EOF'
-Usage: backlog.sh [-R owner/repo]
+Usage: backlog.sh [-R owner/repo] [-i]
        backlog.sh <number> [-c] [-R owner/repo]
 
 Prints the open issues of a GitHub repository as a table. With an issue
@@ -19,20 +19,24 @@ number, shows that issue instead; see issue.sh --help.
 Options:
   -R, --repo owner/repo   Repository to read; also accepts a GitHub URL.
                           Defaults to the repository of the current directory.
+  -i, --interactive       Browse the issues in fzf, with a preview pane.
   -h, --help              Show this help.
 EOF
 }
 
 repo=''
+interactive=false
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == --*=* ]]; then set -- "${1%%=*}" "${1#*=}" "${@:2}"; fi
   case "$1" in
     -R | --repo) needs_value "$1" $#; repo="$2"; shift 2 ;;
+    -i | --interactive) interactive=true; shift ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; fail "unknown argument: $1" ;;
   esac
 done
 repo="$(resolve_repo "$repo")"
+if [[ "$interactive" == true ]]; then check_browse; fi
 
 query='
 query($owner: String!, $name: String!, $endCursor: String) {
@@ -100,8 +104,8 @@ def row($branch):
       {key: "title", header: "TITLE", flex: true},
       {key: "labels", header: "LABELS", max: 40},
       {key: "assignees", header: "ASSIGNEE"},
-      {key: "progress", header: "PROGRESS"},
-      {key: "updated", header: "UPDATED"}
+      {key: "progress", header: "PROGRESS", drop: true},
+      {key: "updated", header: "UPDATED", drop: true}
     ],
     rows: [$issues | map(select(.parent == null or .parent.state != "OPEN")) | sort_by(-.number)[]
            | row(""), subtree("")],
@@ -119,8 +123,12 @@ def row($branch):
 | table
 '
 
-issues="$(gh api graphql --paginate --slurp \
+issues="$(with_spinner "Loading the open issues of ${repo}…" gh api graphql --paginate --slurp \
   -F owner="${repo%%/*}" -F name="${repo#*/}" -f query="$query")" \
   || fail "could not read the issues of $repo"
 
-render_table "$program" --arg repo "$repo" <<<"$issues"
+if [[ "$interactive" == true ]]; then
+  browse issue "$repo" "Backlog · $repo" "$program" --arg repo "$repo" <<<"$issues"
+else
+  render_table "$program" --arg repo "$repo" <<<"$issues"
+fi

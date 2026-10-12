@@ -58,14 +58,16 @@ def typeCell:
 
 def personCell: profileUrl as $profile | "@\(.)" | cell(magenta) | linkTo($profile);
 
-def statusLine:
-  [stateCell,
+# On a terminal the state sits on the header frame instead.
+def statusCells:
+  [(if $isTerminal then empty else stateCell end),
    (if $layout == "sidebar" then empty else typeCell end),
    (.author.login // "ghost" | personCell) + (" opened \(.createdAt | ago)" | cell(dim)),
    (if .state == "OPEN" then "updated \(.updatedAt | ago)" else "closed \(.closedAt // .updatedAt | ago)" end
     | cell(dim)),
-   (.comments | length | plural("comment") | cell(dim))]
-  | joinCells(" · " | cell(dim));
+   (.comments | length | plural("comment") | cell(dim))];
+
+def statusLine: statusCells | joinCells(" · " | cell(dim));
 
 def field($label; $value):
   ($label | 12 - length) as $gap
@@ -123,6 +125,13 @@ def cleanMarkdown:
 
 def textLines($indent): cleanMarkdown | split("\n")[] | $indent + . | sub(" +$"; "");
 
+# Word-wraps a raw line to $width, keeping its indent on every piece.
+def wrapLine($width):
+  capture("^(?<indent> *)(?<text>.*)$") as $parts
+  | ($parts.text | split(" ") | map(cell(""))
+     | wrapCells($width - ($parts.indent | length); " " | cell(""))) as $pieces
+  | if $pieces == [] then "" else $pieces[] | $parts.indent + renderInline end;
+
 def hasText: . // "" | test("\\S");
 
 def rule: " " + ("─" | times(if $isTerminal then $terminalWidth - 2 else 100 end) | paint(dim));
@@ -141,8 +150,61 @@ def commentMarkdown:
 
 def showsComments: $showComments and (.comments | length) > 0;
 
-# The parts are printed one by one so the shell can pass the Markdown ones to glow.
-if $part == "header" then
+def inner: $terminalWidth - 4;
+
+def framedHeader:
+  .url as $url
+  | "",
+    frameTop("#\(.number)" | cell(bold) | linkTo($url) | renderInline; stateCell | renderInline; $terminalWidth),
+    ((.title | split(" ") | map(cell(bold) | linkTo($url)) | wrapCells(inner; " " | cell(""))[] | renderInline),
+     (statusCells | wrapCells(inner; " · " | cell(dim))[] | renderInline),
+     (if $layout == "sidebar" then empty else "", (fields | clipCell(inner) | renderInline) end)
+     | frameLine($terminalWidth)),
+    frameBottom($terminalWidth),
+    "";
+
+def framedSubIssues:
+  if .subIssues.totalCount == 0 then empty
+  else
+    frameTop(("Sub-issues  " | cell(bold)) + progressBar(.subIssuesSummary.completed; .subIssuesSummary.total)
+             | renderInline; ""; $terminalWidth),
+    ((.subIssues.nodes[] | subIssueLine | clipCell(inner) | renderInline),
+     ((.subIssues.totalCount - (.subIssues.nodes | length)) as $more
+      | select($more > 0) | "… \($more) more" | paint(dim))
+     | frameLine($terminalWidth)),
+    frameBottom($terminalWidth),
+    ""
+  end;
+
+def cardTitle($verb):
+  (.author.login // "ghost" | profileUrl as $profile | "@\(.)" | cell(bold) | linkTo($profile))
+  + (" \($verb) \(.createdAt | ago)" | cell(dim))
+  | renderInline;
+
+def cardBody:
+  if $markdown then
+    if .isMinimized then "_\(hiddenReason)_"
+    elif .body | hasText then .body | cleanMarkdown
+    else "_No description provided._" end
+  elif .isMinimized then hiddenReason | paint(dim)
+  elif .body | hasText then .body | textLines("") | wrapLine($terminalWidth)
+  else "No description provided." | paint(dim) end;
+
+# The parts are printed one by one so the shell can pass the Markdown ones to glow. On a terminal,
+# the description and each comment are cards: the shell frames bodyTitle + body, commentTitle + comment.
+if $part == "header" and $isTerminal then
+  framedHeader
+elif $part == "subIssues" and $isTerminal then
+  framedSubIssues
+elif $part == "bodyTitle" then
+  cardTitle("opened")
+elif $part == "commentTitle" then
+  .comments[$index] | cardTitle("commented")
+elif $part == "description" then
+  cardBody
+elif $part == "comment" then
+  .comments[$index] | cardBody
+elif $part == "header" then
   "",
   " " + (.url as $url | ("#\(.number)" | cell(bold)) + ("  " | cell("")) + (.title | cell(bold)) | linkTo($url)
          | renderInline),
@@ -173,27 +235,8 @@ end
 '
 
 # Puts the sidebar lines (--arg sidebar) beside the main column on stdin, padded to $terminalWidth.
-# A main line too wide to share its row keeps it alone. Wide (CJK, emoji) characters count twice.
+# A main line too wide to share its row keeps it alone.
 beside_program='
-def wideRanges:
-  [[4352,4447],[8986,8987],[9193,9196],[9200,9203],[9725,9726],[9748,9749],[9800,9811],[9855,9855],
-   [9875,9875],[9889,9889],[9898,9899],[9917,9918],[9924,9925],[9934,9934],[9940,9940],[9962,9962],
-   [9970,9971],[9973,9973],[9978,9978],[9981,9981],[9989,9989],[9994,9995],[10024,10024],[10060,10060],
-   [10062,10062],[10067,10069],[10071,10071],[10133,10135],[10160,10160],[10175,10175],[11035,11036],
-   [11088,11088],[11093,11093],[11904,12350],[12353,42191],[44032,55203],[63744,64255],[65072,65103],
-   [65280,65376],[65504,65510],[127744,128591],[128640,128767],[129280,129535],[129648,129791],
-   [131072,262141]];
-
-def charWidth:
-  . as $code
-  | if $code < 32 or ($code >= 768 and $code <= 879) or ($code >= 8203 and $code <= 8207)
-       or ($code >= 65024 and $code <= 65039) then 0
-    elif any(wideRanges[]; $code >= .[0] and $code <= .[1]) then 2
-    else 1 end;
-
-def visibleWidth:
-  gsub("\u001b\\[[0-9;]*m"; "") | gsub("\u001b\\]8;[^\u0007]*\u0007"; "") | explode | map(charWidth) | add // 0;
-
 ($sidebar | split("\n")) as $side
 | rtrimstr("\n") | split("\n")
 | reduce .[] as $line ({lines: [], next: 0};
@@ -205,12 +248,22 @@ def visibleWidth:
 | .lines[], ($side[.next:][] | (" " | times($terminalWidth + 3)) + .)
 '
 
-issue="$(gh issue view "$number" -R "$repo" --json "$fields")" \
+# Frames the lines on stdin as a card titled --arg title, dropping blank lines around them.
+frame_program='
+[rtrimstr("\n") | split("\n")[]] as $lines
+| [range(0; $lines | length) | select($lines[.] | visibleWidth > 0)] as $filled
+| frameTop($title; ""; $terminalWidth),
+  (if $filled == [] then empty else $lines[$filled[0]:$filled[-1] + 1][] end | frameLine($terminalWidth)),
+  frameBottom($terminalWidth),
+  ""
+'
+
+issue="$(with_spinner "Loading issue #$number of ${repo}…" gh issue view "$number" -R "$repo" --json "$fields")" \
   || fail "could not read issue #$number of $repo"
 
 is_terminal=false
 width=1000
-if [[ -t 1 ]]; then
+if on_terminal; then
   is_terminal=true
   width="$(terminal_width)"
 fi
@@ -226,11 +279,15 @@ if [[ "$markdown" == true && "$width" -ge 110 ]]; then
 fi
 sidebar_width=$((width / 4 < 28 ? 28 : width / 4 > 40 ? 40 : width / 4))
 main_width=$((width - sidebar_width - 3))
+comment_count="$(jq '.comments | length' <<<"$issue")"
+
+comment_index=0
 
 # Usage: print_part part [width]
 print_part() {
   render_with "$is_terminal" "${2:-$width}" "$program" --arg part "$1" --arg layout "$layout" \
-    --argjson showComments "$show_comments" --argjson markdown "$markdown" <<<"$issue"
+    --argjson showComments "$show_comments" --argjson markdown "$markdown" --argjson index "$comment_index" \
+    <<<"$issue"
 }
 
 print_markdown_part() {
@@ -241,11 +298,27 @@ print_markdown_part() {
   fi
 }
 
+# Usage: print_card width title_part content_part
+print_card() {
+  print_markdown_part "$3" "$(($1 - 4))" \
+    | render_with true "$1" "$frame_program" -R -s --arg title "$(print_part "$2" "$1")"
+}
+
 print_main() {
-  print_markdown_part body "$1"
-  print_part subIssues "$1"
-  print_part divider "$1"
-  print_markdown_part comments "$1"
+  if [[ "$is_terminal" == true ]]; then
+    print_card "$1" bodyTitle description
+    print_part subIssues "$1"
+    if [[ "$show_comments" == true ]]; then
+      for ((comment_index = 0; comment_index < comment_count; comment_index++)); do
+        print_card "$1" commentTitle comment
+      done
+    fi
+  else
+    print_markdown_part body "$1"
+    print_part subIssues "$1"
+    print_part divider "$1"
+    print_markdown_part comments "$1"
+  fi
 }
 
 print_issue() {
