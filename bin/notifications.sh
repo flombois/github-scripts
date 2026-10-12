@@ -5,7 +5,7 @@ source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: inbox.sh [-R owner/repo] [-a] [-p] [-i] [--format f] [--refresh]
+Usage: notifications.sh [-R owner/repo] [-a] [-p] [-i] [--format f] [--refresh]
 
 Prints your unread GitHub notifications (the 50 most recent) as a table,
 grouped by repository: review requests, mentions, assignments, CI runs...
@@ -100,7 +100,7 @@ def row:
 . as $threads
 | ($threads | map(select(.unread)) | length) as $unread
 | {
-    title: (("Inbox" | cell(bold))
+    title: (("Notifications" | cell(bold))
             + (if $repo == "" then [] else ("  " | cell("")) + ($repo | cell(cyan)) end)),
     subtitle: ((if $includeRead then "\($threads | length) notifications, \($unread) unread"
                 else "\($unread) unread" end)
@@ -128,5 +128,5 @@ def row:
 threads="$(cached_gh "Loading your notifications…" api "$endpoint")" \
   || fail "could not read your notifications"
 
-show_table inbox "$program" --arg repo "$repo" --argjson includeRead "$include_read" \
+show_table notification "$program" --arg repo "$repo" --argjson includeRead "$include_read" \
   --argjson participating "$participating" <<<"$threads"

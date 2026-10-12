@@ -63,7 +63,7 @@ def hyperlink($url):
 
 def cell($style): [{text: ., style: $style}];
 def linkTo($url): map(.link = $url);
-# Decoration, such as the backlog's tree lines, that --format json and csv leave out.
+# Decoration, such as the issue tree lines, that --format json and csv leave out.
 def decor: map(.decor = true);
 def cellText: map(select(.decor | not) | .text) | join("") | sub("^ +"; "") | sub(" +$"; "");
 def profileUrl:

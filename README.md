@@ -6,7 +6,7 @@
 ghs issues                 # open issues, sub-issues nested under their parent
 ghs issues 42 -c           # issue #42 with its sub-issues, description and comments
 ghs pr -R cli/cli          # pull requests with review, checks and size
-ghs runs -b main -w CI     # recent GitHub Actions runs with outcome and duration
+ghs actions -b main -w CI  # recent GitHub Actions runs with outcome and duration
 ```
 
 ## Requirements
@@ -74,17 +74,17 @@ ghs <command> [options]
 
 `github-scripts` and `ghs` are the same command.
 
-| Command         | Alias    | Shows                                                                   |
-|-----------------|----------|-------------------------------------------------------------------------|
-| `backlog`       | `issues` | Open issues, sub-issues nested under their parent, with type and labels |
-| `issue`         | —        | One issue: state, labels, parent, sub-issues, description and comments  |
-| `pull-requests` | `pr`     | Pull requests with review decision, check results and size              |
-| `pull-request`  | —        | One pull request: reviewers, merge status, checks, files and comments   |
-| `pipeline-runs` | `runs`   | Recent GitHub Actions runs with outcome, duration and success rate      |
-| `inbox`         | `notifications` | Your unread notifications across repositories, with type and reason |
-| `releases`      | —        | Releases with latest / pre-release / draft status, assets and downloads |
-| `repo`          | —        | Overview: stats, recent merges and commits, CI health per workflow, latest release, top contributors |
-| `completion`    | —        | Prints the tab completion script for bash or zsh                        |
+| Command         | Alias   | Shows                                                                   |
+|-----------------|---------|-------------------------------------------------------------------------|
+| `issues`        | —       | Open issues, sub-issues nested under their parent, with type and labels |
+| `issue`         | —       | One issue: state, labels, parent, sub-issues, description and comments  |
+| `pull-requests` | `pr`    | Pull requests with review decision, check results and size              |
+| `pull-request`  | —       | One pull request: reviewers, merge status, checks, files and comments   |
+| `actions`       | `runs`  | Recent GitHub Actions workflow runs with outcome, duration and success rate |
+| `notifications` | `inbox` | Your unread notifications across repositories, with type and reason     |
+| `releases`      | —       | Releases with latest / pre-release / draft status, assets and downloads |
+| `repo`          | —       | Overview: stats, recent merges and commits, CI health per workflow, latest release, top contributors |
+| `completion`    | —       | Prints the tab completion script for bash or zsh                        |
 
 Every command reads the repository of the current directory, or the one given with `-R`:
 
@@ -92,7 +92,7 @@ Every command reads the repository of the current directory, or the one given wi
 ghs issues
 ghs issues -R owner/repo
 ghs pr -R owner/repo -s all -L 50
-ghs runs -R owner/repo -b main -w CI -L 10
+ghs actions -R owner/repo -b main -w CI -L 10
 ```
 
 `-R` also accepts a GitHub URL or an SSH remote.
@@ -130,7 +130,7 @@ description and comments are rendered as Markdown (set `GLAMOUR_STYLE=light` on 
 on a terminal 110 columns or wider the assignees, labels, type, milestone and parent move to a sidebar
 on the right, as on GitHub. Piped output keeps the raw Markdown.
 
-To browse instead, add `-i` to `issues`, `pr` or `runs` (needs fzf). Type to filter the list; the
+To browse instead, add `-i` to `issues`, `pr`, `actions`, `notifications` or `releases` (needs fzf). Type to filter the list; the
 issue, pull request or run under the cursor shows in a preview pane (beside the list from 160
 columns, below it otherwise). Enter opens it in full, ctrl-o opens it in the browser, ctrl-r reloads
 the list, Esc quits. Alt keys act on the item, then reload the list; changes ask for confirmation
@@ -140,11 +140,11 @@ first:
 |----------|------|
 | issues   | alt-a assign to me · alt-c comment · alt-x close |
 | pr       | alt-k check out (in a clone of the repository) · alt-a approve · alt-m merge (gh asks how) · alt-c comment |
-| runs     | alt-r re-run failed jobs · alt-l failed logs · alt-w watch |
-| inbox    | alt-d mark as read (Enter shows a pull request or issue; other threads open in the browser) |
+| actions  | alt-r re-run failed jobs · alt-l failed logs · alt-w watch |
+| notifications | alt-d mark as read (Enter shows a pull request or issue; other threads open in the browser) |
 
-`ghs inbox` reads your notifications from every repository (`-R` for one, `-a` to include read
-ones, `-p` for threads you take part in), so it needs no repository.
+`ghs notifications` (or `ghs inbox`) reads your notifications from every repository (`-R` for one,
+`-a` to include read ones, `-p` for threads you take part in), so it needs no repository.
 
 ```sh
 ghs issues -i
@@ -152,7 +152,7 @@ ghs pr -s all -i
 ```
 
 To follow CI, `--watch` redraws every 5 seconds (or `--watch 10`) and stops once nothing is queued or
-running: `ghs runs --watch` for the runs table, `ghs pr 42 --watch` for a pull request's checks.
+running: `ghs actions --watch` for the runs table, `ghs pr 42 --watch` for a pull request's checks.
 
 For tab completion of commands, options, states, formats, workflow names, branches and repositories,
 add this line to `~/.zshrc` (or `bash` to `~/.bashrc`):

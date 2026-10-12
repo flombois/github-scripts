@@ -148,7 +148,7 @@ file_age() {
 # Usage: show_table kind program [jq options…] <json
 # Prints a table program's output the way the shared options ask: the framed or plain table,
 # --format json or csv, the fzf list (--list-width) or the fzf browse (-i). kind is the browse
-# kind: issue, pr, run, or inbox (whose rows each name their own kind).
+# kind: issue, pr, run, release, or notification (whose rows each name their own kind).
 show_table() {
   local kind="$1" program="$2"
   shift 2
@@ -193,7 +193,7 @@ browse() {
     issue) key_actions=(alt-a:assign:1 alt-c:comment:1 alt-x:close:1) ;;
     pr) key_actions=(alt-k:checkout:0 alt-a:approve:1 alt-m:merge:1 alt-c:comment:1) ;;
     run) key_actions=(alt-r:rerun:1 alt-l:logs:0 alt-w:watch:1) ;;
-    inbox) key_actions=(alt-d:read:1) ;;
+    notification) key_actions=(alt-d:read:1) ;;
   esac
   for key_action in ${key_actions[@]+"${key_actions[@]}"}; do
     name="${key_action#*:}"
@@ -215,8 +215,8 @@ browse_title() {
   case "$1" in
     issue) echo "Issues · $repo" ;;
     pr) echo "Pull requests · $repo" ;;
-    run) echo "Pipeline runs · $repo" ;;
-    inbox) echo "Inbox${repo:+ · $repo}" ;;
+    run) echo "Actions · $repo" ;;
+    notification) echo "Notifications${repo:+ · $repo}" ;;
     release) echo "Releases · $repo" ;;
   esac
 }
@@ -227,7 +227,7 @@ browse_help() {
     issue) echo "alt-a assign me · alt-c comment · alt-x close" ;;
     pr) echo "alt-k check out · alt-a approve · alt-m merge · alt-c comment" ;;
     run) echo "alt-r re-run failed · alt-l failed logs · alt-w watch" ;;
-    inbox) echo "alt-d mark as read" ;;
+    notification) echo "alt-d mark as read" ;;
   esac
 }
 

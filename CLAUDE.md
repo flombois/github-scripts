@@ -21,13 +21,13 @@ Every script in `bin/` has the same shape; copy an existing one:
    - Each row carries `_key: [kind, repo, id]`. In the fzf list these are hidden tab-separated
      fields, which `lib/browse.sh <action> kind repo id extra` uses for the preview, Enter and
      ctrl-o.
-   - `inbox.sh` rows name their own kind: `pr`, `issue`, or `link` (the id is a URL, opened in the
+   - `notifications.sh` rows name their own kind: `pr`, `issue`, or `link` (the id is a URL, opened in the
      browser), with the notification thread id as the extra field.
    - The alt-key actions are `kind:action` cases in `browse.sh`, bound in `browse()`
      (`key_actions`). Changes go through `act` (clear the screen, confirm with gum or y/N on
      `/dev/tty`, run, pause). Commands that prompt themselves go through `interactive`.
 
-`issue.sh` and `pull-request.sh` are the detail views, with no table. `backlog.sh 42` and
+`issue.sh` and `pull-request.sh` are the detail views, with no table. `issues.sh 42` and
 `pull-requests.sh 42` hand over to them when the first argument is a number. Their shared pieces live
 in `lib/detail.jq` (cells, sidebar sections, cards, header box, Markdown cleanup) and `lib/detail.sh`
 (layout, `print_part`, `print_card`, `beside_program`, `frame_program`, `print_detail`). A view sets
@@ -111,7 +111,7 @@ Table rules, all enforced by `lib/table.jq`:
 - `/bin/bash` on macOS is 3.2: expand a possibly-empty array as `${filters[@]+"${filters[@]}"}`
   under `set -u`, and stay with indexed arrays and plain `[[ ]]` tests.
 - Edit jq programs with the Edit tool. jq's `//` operator collides with sed/perl regex delimiters.
-- `gh run list` can return an empty `workflowName`; `pipeline-runs.sh` falls back to `name`.
+- `gh run list` can return an empty `workflowName`; `actions.sh` falls back to `name`.
 - GitHub truncates some `displayTitle`s itself, so a title ending in `…` is not a clipping bug.
 - Org remotes look like `org-12345678@github.com:Owner/repo.git`; `resolve_repo` strips any
   `user@github.com:` prefix.
@@ -134,7 +134,7 @@ fake `glow` that prints `glow version 2.1.2` first on the `PATH`. For states no 
 since the agent shell is zsh:
 
 ```sh
-bash -c 'program="$(sed -n "/^program=.\$/,/^.\$/p" bin/pipeline-runs.sh | sed "1d;\$d")"
+bash -c 'program="$(sed -n "/^program=.\$/,/^.\$/p" bin/actions.sh | sed "1d;\$d")"
 source lib/common.sh
 render_table "$program" --arg repo fixture/runs --arg branch "" --arg workflow "" < runs.json'
 ```

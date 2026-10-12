@@ -3,15 +3,15 @@
 set -euo pipefail
 source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
-# `backlog 42` shows issue #42.
+# `issues 42` shows issue #42.
 if [[ "${1:-}" =~ ^#?[0-9]+$ ]]; then
   exec "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/issue.sh" "$@"
 fi
 
 usage() {
   cat <<'EOF'
-Usage: backlog.sh [-R owner/repo] [-s state] [filters] [-i] [--format f] [--refresh]
-       backlog.sh <number> [-c] [-R owner/repo]
+Usage: issues.sh [-R owner/repo] [-s state] [filters] [-i] [--format f] [--refresh]
+       issues.sh <number> [-c] [-R owner/repo]
 
 Prints the open issues of a GitHub repository as a table, sub-issues nested
 under their parent. With an issue number, shows that issue instead; see
@@ -166,7 +166,7 @@ def row($branch):
     | ($kids[$index] | row($prefix + (if $isLast then "└─ " else "├─ " end))),
       ($kids[$index] | subtree($prefix + (if $isLast then "   " else "│  " end)));
   {
-    title: (("Backlog" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan) | linkTo("https://github.com/\($repo)"))),
+    title: (("Issues" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan) | linkTo("https://github.com/\($repo)"))),
     subtitle: ("\($issues | length) \($counted)"
                + (if $filters == "" then "" else " · \($filters)" end)
                + " · \(generatedAt)" | cell(dim)),

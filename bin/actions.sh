@@ -5,7 +5,7 @@ source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: pipeline-runs.sh [-R owner/repo] [-b branch] [-w workflow] [-L limit] [-i] [--watch [s]] [--format f]
+Usage: actions.sh [-R owner/repo] [-b branch] [-w workflow] [-L limit] [-i] [--watch [s]] [--format f]
 
 Prints the recent GitHub Actions runs of a repository as a table.
 
@@ -95,7 +95,7 @@ def row:
 | ([if $branch == "" then empty else "branch \($branch)" end,
     if $workflow == "" then empty else "workflow \($workflow)" end] | join(" · ")) as $filters
 | {
-    title: (("Pipeline runs" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan) | linkTo("https://github.com/\($repo)"))),
+    title: (("Actions" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan) | linkTo("https://github.com/\($repo)"))),
     subtitle: ("last \($runs | length | plural("run"))"
                + (if $filters == "" then "" else " · \($filters)" end)
                + " · \(generatedAt)" | cell(dim)),
