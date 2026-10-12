@@ -68,6 +68,13 @@ def tally($label; $style): if . > 0 then "\(.) \($label)" | cell($style) else em
 
 def plural($word): if . == 1 then "1 \($word)" else "\(.) \($word)s" end;
 
+# A five-step bar such as "▰▰▰▱▱ 3/5".
+def progressBar($completed; $total):
+  ($completed * 5 / $total | round) as $filled
+  | ("▰" | times($filled) | cell(green))
+    + ("▱" | times(5 - $filled) | cell(dim))
+    + (" \($completed)/\($total)" | cell(""));
+
 # Renders {title, subtitle, columns: [{key, header, align?, flex?, max?}], rows, footer, empty} as lines.
 # The single flex column absorbs the terminal width left over by the others; max caps a column.
 def table:

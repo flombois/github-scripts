@@ -4,7 +4,8 @@
 
 ```sh
 ghs issues                 # open issues, sub-issues nested under their parent
-ghs prs -R cli/cli         # pull requests with review, checks and size
+ghs issues 42 -c           # issue #42 with its sub-issues, description and comments
+ghs pr -R cli/cli          # pull requests with review, checks and size
 ghs runs -b main -w CI     # recent GitHub Actions runs with outcome and duration
 ```
 
@@ -13,6 +14,8 @@ ghs runs -b main -w CI     # recent GitHub Actions runs with outcome and duratio
 - [`gh`](https://cli.github.com/), logged in (`gh auth login`)
 - [`jq`](https://jqlang.org/) 1.7 or later
 - bash 3.2 or later
+- optional: [`glow`](https://github.com/charmbracelet/glow) 3 or later, to render issue descriptions and
+  comments as Markdown
 
 ## Install
 
@@ -28,7 +31,8 @@ The installer works on macOS and Linux and reports each step:
    apk or Homebrew on Linux).
 2. **Requirements**: checks `gh` and `jq` (1.7 or later). For each missing or outdated one it shows
    the install command and asks before running it. It also offers `gh auth login` if you are not
-   logged in.
+   logged in. glow is optional: the installer offers it through
+   Homebrew, and elsewhere prints where to get it (Linux distributions package only glow 2 so far).
 3. **Commands**: links `github-scripts` and its short name `ghs` into `~/.local/bin`, pointing at the
    clone. If that directory is not on your `PATH`, it prints the line to add to your shell profile.
 
@@ -71,7 +75,8 @@ ghs <command> [options]
 | Command         | Alias    | Shows                                                                   |
 |-----------------|----------|-------------------------------------------------------------------------|
 | `backlog`       | `issues` | Open issues, sub-issues nested under their parent, with type and labels |
-| `pull-requests` | `prs`    | Pull requests with review decision, check results and size              |
+| `issue`         | —        | One issue: state, labels, parent, sub-issues, description and comments  |
+| `pull-requests` | `pr`     | Pull requests with review decision, check results and size              |
 | `pipeline-runs` | `runs`   | Recent GitHub Actions runs with outcome, duration and success rate      |
 
 Every command reads the repository of the current directory, or the one given with `-R`:
@@ -79,11 +84,22 @@ Every command reads the repository of the current directory, or the one given wi
 ```sh
 ghs issues
 ghs issues -R owner/repo
-ghs prs -R owner/repo -s all -L 50
+ghs pr -R owner/repo -s all -L 50
 ghs runs -R owner/repo -b main -w CI -L 10
 ```
 
 `-R` also accepts a GitHub URL or an SSH remote.
+
+To read one issue, put its number after `issues` (or `issue`). `-c` adds the comments:
+
+```sh
+ghs issues 42
+ghs issues 42 -c -R owner/repo
+```
+
+Long issues open in `less` (or `$PAGER`); short ones print directly. With glow installed, the
+description and comments are rendered as Markdown (set `GLAMOUR_STYLE=light` on a light terminal).
+Piped output keeps the raw Markdown.
 
 - `ghs --help` lists the commands.
 - `ghs <command> --help` (or `ghs help <command>`) lists the options of a command.
@@ -94,8 +110,9 @@ Tables fit the terminal width (override with `COLUMNS=120`). Piped output has no
 
 - `cli.sh` — the `ghs` entry point: routes `ghs <command>` to `bin/<command>.sh`, and holds the aliases
 - `install.sh`, `uninstall.sh` — add and remove the `github-scripts` and `ghs` links
-- `bin/` — one script per command: options, the `gh` query, and the columns of its table
-- `lib/common.sh` — option helpers, repository detection, and the `jq` call
+- `bin/` — one script per command: options, the `gh` query, and the columns of its table (`issue.sh`
+  prints one issue instead of a table)
+- `lib/common.sh` — option helpers, repository detection, the `jq` call, paging and glow
 - `lib/install.sh` — link names and output helpers shared by the installer and uninstaller
 - `lib/packages.sh` — platform detection, requirement checks and package installs for the installer
 - `lib/table.jq` — table rendering shared by every command; a cell is a list of `{text, style}` segments

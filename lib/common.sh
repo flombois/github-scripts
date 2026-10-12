@@ -31,16 +31,53 @@ resolve_repo() {
   echo "$repo"
 }
 
-# Renders the JSON on stdin; $1 is a jq program that ends in `| table`, the rest are extra jq options.
+# Renders the JSON on stdin; $1 is a jq program that ends in `| table` or prints its own lines,
+# the rest are extra jq options.
 render_table() {
-  local program="$1"
-  shift
-  local is_terminal=false
-  local width=1000
   if [[ -t 1 ]]; then
-    is_terminal=true
-    width="${COLUMNS:-$(tput cols 2>/dev/null || echo 120)}"
+    render_with true "$(terminal_width)" "$@"
+  else
+    render_with false 1000 "$@"
   fi
+}
+
+# Runs a command and pages its output through less (or $PAGER) when one is available.
+# Decide colour and width before calling it: the command's output is a pipe.
+page() {
+  if [[ -n "${PAGER:-}" ]] || command -v less >/dev/null; then
+    "$@" | LESS="${LESS:-FRX}" ${PAGER:-less}
+  else
+    "$@"
+  fi
+}
+
+# True when glow 3 or later is installed.
+has_glow() {
+  [[ "$(glow --version 2>/dev/null)" =~ version\ ([0-9]+) ]] && [[ "${BASH_REMATCH[1]}" -ge 3 ]]
+}
+
+# Renders the Markdown on stdin with glow, in colour, to fit the given terminal width.
+# TERM=dumb stops glow querying the terminal's colours (the replies would land in less);
+# -s still forces colour. glow pads every line and indents by two; both are trimmed.
+render_markdown() {
+  local text
+  text="$(cat)"
+  [[ -n "$text" ]] || return 0
+  local width=$(($1 - 1 < 101 ? $1 - 1 : 101))
+  TERM=dumb glow -s "${GLAMOUR_STYLE:-dark}" -w "$width" - <<<"$text" \
+    | LC_ALL=C sed -E -e 's/^ //' -e $'s/(\x1b\\[[0-9;]*m| )+$/\x1b[0m/'
+}
+
+terminal_width() {
+  echo "${COLUMNS:-$(tput cols 2>/dev/null || echo 120)}"
+}
+
+# Usage: render_with is_terminal width program [jq options…]
+render_with() {
+  local is_terminal="$1"
+  local width="$2"
+  local program="$3"
+  shift 3
   jq -r --argjson isTerminal "$is_terminal" --argjson terminalWidth "$width" "$@" \
     "$(cat "$LIB_DIR/table.jq")"$'\n'"$program"
 }

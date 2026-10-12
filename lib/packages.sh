@@ -63,6 +63,42 @@ ensure_tool() {
   ok "$tool $version ($(command -v "$tool"))"
 }
 
+# Like ensure_tool for a tool ghs works without: never fails, and offers the install only
+# through Homebrew, the one package manager with a recent enough glow. $4 says what it is for.
+offer_tool() {
+  local tool="$1"
+  local minimum="$2"
+  local url="$3"
+  local purpose="$4"
+  local version
+  version="$(tool_version "$tool")"
+  if is_recent_enough "$version" "$minimum"; then
+    ok "$tool $version ($(command -v "$tool")), $purpose"
+    return
+  fi
+  if [[ -z "$version" ]]; then
+    note "$tool is not installed (optional, $purpose)"
+  else
+    note "$tool $version is installed, but $minimum or later is needed (optional, $purpose)"
+  fi
+  if [[ "$package_manager" != brew ]]; then
+    echo "    Install $tool $minimum or later from $url"
+    return
+  fi
+  local command
+  command="$(install_command "$tool")"
+  if ! confirm "    Install it with '$command'?"; then
+    echo "    Skipped; install it later from $url"
+    return
+  fi
+  echo "    Running: $command"
+  if eval "$command" && hash -r && is_recent_enough "$(tool_version "$tool")" "$minimum"; then
+    ok "$tool $(tool_version "$tool") ($(command -v "$tool"))"
+  else
+    note "could not install $tool $minimum or later; install it from $url"
+  fi
+}
+
 # Prints the version of $1, like 1.7.1, or nothing when it is not installed.
 tool_version() {
   command -v "$1" >/dev/null || return 0

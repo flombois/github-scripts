@@ -5,7 +5,7 @@ ROOT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 source "$ROOT_DIR/lib/common.sh"
 
 # "alias command" pairs; bash 3.2 has no associative arrays.
-ALIASES=("issues backlog" "prs pull-requests" "runs pipeline-runs")
+ALIASES=("issues backlog" "pr pull-requests" "runs pipeline-runs")
 
 usage() {
   local name

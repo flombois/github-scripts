@@ -13,6 +13,10 @@ the package manager of this macOS or Linux machine, then links github-scripts
 and its short name ghs to cli.sh in this clone. Run it again after moving the
 clone.
 
+glow 3 is optional: with it, ghs issues <number> renders the description as
+Markdown. It is offered through Homebrew; elsewhere the installer prints where
+to get it.
+
 Options:
   --prefix DIR   Directory for the links; it should be on your PATH.
                  Defaults to $DEFAULT_PREFIX.
@@ -65,6 +69,7 @@ heading "Requirements"
 ok "bash ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]} ($BASH)"
 ensure_tool gh "" https://cli.github.com/
 ensure_tool jq 1.7 https://jqlang.org/download/
+offer_tool glow 3.0 https://github.com/charmbracelet/glow#installation "renders issue Markdown"
 check_login
 
 heading "Commands"

@@ -3,11 +3,18 @@
 set -euo pipefail
 source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
+# `backlog 42` shows issue #42.
+if [[ "${1:-}" =~ ^#?[0-9]+$ ]]; then
+  exec "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/issue.sh" "$@"
+fi
+
 usage() {
   cat <<'EOF'
 Usage: backlog.sh [-R owner/repo]
+       backlog.sh <number> [-c] [-R owner/repo]
 
-Prints the open issues of a GitHub repository as a table.
+Prints the open issues of a GitHub repository as a table. With an issue
+number, shows that issue instead; see issue.sh --help.
 
 Options:
   -R, --repo owner/repo   Repository to read; also accepts a GitHub URL.
@@ -61,12 +68,7 @@ def assigneesCell:
 
 def progressCell:
   .subIssuesSummary as $summary
-  | if $summary.total == 0 then []
-    else ($summary.completed * 5 / $summary.total | round) as $filled
-    | ("▰" | times($filled) | cell(green))
-      + ("▱" | times(5 - $filled) | cell(dim))
-      + (" \($summary.completed)/\($summary.total)" | cell(""))
-    end;
+  | if $summary.total == 0 then [] else progressBar($summary.completed; $summary.total) end;
 
 def row($branch):
   {number: ("#\(.number)" | cell(bold)),

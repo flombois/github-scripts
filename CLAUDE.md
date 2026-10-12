@@ -15,6 +15,12 @@ Every script in `bin/` has the same shape; copy an existing one:
 3. A jq `program` that builds `{title, subtitle, columns, rows, footer, empty}` and ends in `| table`,
    handed to `render_table` with any extra `--arg`s.
 
+`issue.sh` is the one command without a table: after steps 1–2 its program prints its own lines
+in parts (`--arg part header|body|divider|comments|footer`), so the shell can pass the body and the
+comments to glow 3 (`render_markdown`) on a terminal, and `page` the whole issue through `less`.
+Without glow, or when piped, those parts stay raw Markdown. `backlog.sh 42` (`ghs issues 42`) hands
+over to it when the first argument is a number.
+
 A new `bin/<name>.sh` is a `ghs <name>` command with no change to `cli.sh`. Its line-2 comment is
 its description in `ghs --help`, so keep it to one line. Short aliases live in `ALIASES` in
 `cli.sh`; add the alias to the README command table too.
@@ -31,6 +37,8 @@ Table rules, all enforced by `lib/table.jq`:
 
 ## Gotchas
 
+- glow writes terminal queries (colours, cursor) to stderr even with `-s`; their replies would land
+  in `less`. `render_markdown` runs it with `TERM=dumb`, which stops them and keeps the colours.
 - **jq evaluates a function's arguments against the function's input.** In
   `" " | times($width - length)`, `length` measures `" "`. Bind first:
   `($width - length) as $gap | " " | times($gap)`. This caused most bugs so far.
@@ -53,7 +61,10 @@ COLUMNS=110 script -q /dev/null bin/pull-requests.sh -R cli/cli -L 10 \
   | LC_ALL=C sed $'s/\x1b\\[[0-9;]*m//g'                                # terminal: clipped to 110
 ```
 
-`cli/cli` has enough open PRs, labels and runs to exercise most cells. For states no live repo shows
+`cli/cli` has enough open PRs, labels and runs to exercise most cells. For `issue.sh`, cli/cli
+#14529 has a parent and sub-issues, #14643 is closed as not planned, and vercel/next.js #100022 has a
+type. Under `script`, set `PAGER=cat` and redirect stdin from `/dev/null`. To check the fallback, put a
+fake `glow` that prints `glow version 2.1.2` first on the `PATH`. For states no live repo shows
 (running, queued, failed runs), render a hand-written fixture through the real program, under bash
 since the agent shell is zsh:
 
