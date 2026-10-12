@@ -5,39 +5,76 @@ source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: pull-requests.sh [-R owner/repo] [-s state] [-L limit] [-i]
+Usage: pull-requests.sh [-R owner/repo] [-s state] [-L limit] [filters] [-i] [--format f] [--refresh]
 
 Prints the pull requests of a GitHub repository as a table.
 
 Options:
-  -R, --repo owner/repo   Repository to read; also accepts a GitHub URL.
-                          Defaults to the repository of the current directory.
-  -s, --state state       open (default), closed, merged or all.
-  -L, --limit count       Most recent pull requests to show (default 30).
-  -i, --interactive       Browse the pull requests in fzf, with a preview pane.
-  -h, --help              Show this help.
+  -R, --repo owner/repo     Repository to read; also accepts a GitHub URL.
+                            Defaults to the repository of the current directory.
+  -s, --state state         open (default), closed, merged or all.
+  -L, --limit count         Most recent pull requests to show (default 30).
+  -l, --label name          Only pull requests with this label; repeat for several.
+  -a, --assignee login      Only pull requests assigned to this login (@me for you).
+  -A, --author login        Only pull requests opened by this login.
+  -B, --base branch         Only pull requests into this branch.
+  -r, --review-requested l  Only pull requests waiting for a review from this login or team.
+  -S, --search text         Only pull requests matching this text (GitHub search syntax).
+  -i, --interactive         Browse the pull requests in fzf, with a preview pane.
+      --format format       table (default), json or csv.
+      --refresh             Fetch again instead of using the 5-minute cache.
+  -h, --help                Show this help.
 EOF
 }
 
+script_args=("$@")
 repo=''
-interactive=false
 state='open'
 limit=30
+labels=()
+assignee=''
+author=''
+base=''
+reviewer=''
+search=''
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == --*=* ]]; then set -- "${1%%=*}" "${1#*=}" "${@:2}"; fi
   case "$1" in
     -R | --repo) needs_value "$1" $#; repo="$2"; shift 2 ;;
     -s | --state) needs_value "$1" $#; state="$2"; shift 2 ;;
     -L | --limit) needs_value "$1" $#; limit="$2"; shift 2 ;;
-    -i | --interactive) interactive=true; shift ;;
+    -l | --label) needs_value "$1" $#; labels+=("$2"); shift 2 ;;
+    -a | --assignee) needs_value "$1" $#; assignee="$2"; shift 2 ;;
+    -A | --author) needs_value "$1" $#; author="$2"; shift 2 ;;
+    -B | --base) needs_value "$1" $#; base="$2"; shift 2 ;;
+    -r | --review-requested) needs_value "$1" $#; reviewer="$2"; shift 2 ;;
+    -S | --search) needs_value "$1" $#; search="$2"; shift 2 ;;
     -h | --help) usage; exit 0 ;;
-    *) usage >&2; fail "unknown argument: $1" ;;
+    *)
+      shared_option "$@"
+      [[ "$taken" -gt 0 ]] || { usage >&2; fail "unknown argument: $1"; }
+      shift "$taken"
+      ;;
   esac
 done
 [[ "$state" =~ ^(open|closed|merged|all)$ ]] || fail "state must be open, closed, merged or all, got: $state"
 require_count --limit "$limit"
+check_shared_options
 repo="$(resolve_repo "$repo")"
-if [[ "$interactive" == true ]]; then check_browse; fi
+
+# The gh pr list flags for the filters, and how the subtitle names them.
+filter_flags=()
+shown=()
+for label in ${labels[@]+"${labels[@]}"}; do filter_flags+=(--label "$label"); shown+=("label $label"); done
+if [[ -n "$assignee" ]]; then filter_flags+=(--assignee "$assignee"); shown+=("assignee $assignee"); fi
+if [[ -n "$author" ]]; then filter_flags+=(--author "$author"); shown+=("author $author"); fi
+if [[ -n "$base" ]]; then filter_flags+=(--base "$base"); shown+=("base $base"); fi
+query="$search"
+if [[ -n "$reviewer" ]]; then query="review-requested:$reviewer $query"; shown+=("review requested from $reviewer"); fi
+if [[ -n "$search" ]]; then shown+=("\"$search\""); fi
+if [[ -n "$query" ]]; then filter_flags+=(--search "$query"); fi
+filters=''
+for name in ${shown[@]+"${shown[@]}"}; do filters+="${filters:+ · }$name"; done
 
 program='
 def stateCell:
@@ -72,7 +109,7 @@ def checksCell:
   checks as $outcomes
   | ($outcomes | length) as $total
   | "\($outcomes | map(select(. == "pass")) | length)/\($total)" as $count
-  | if $total == 0 then "—" | cell(dim)
+  | if $total == 0 then "—" | cell(dim) | decor
     elif any($outcomes[]; . == "fail") then "✗ \($count)" | cell(red)
     elif any($outcomes[]; . == "pending") then "● \($count)" | cell(yellow)
     else "✓ \($count)" | cell(green) end;
@@ -81,7 +118,8 @@ def sizeCell: ("+\(.additions)" | cell(green)) + (" -\(.deletions)" | cell(red))
 
 def row:
   "https://github.com/\($repo)/pull/\(.number)" as $url
-  | {number: ("#\(.number)" | cell(bold) | linkTo($url)),
+  | {_key: ["pr", $repo, .number],
+    number: ("#\(.number)" | cell(bold) | linkTo($url)),
     state: stateCell,
     title: (titleCell | linkTo($url)),
     author: (.author.login | profileUrl as $profile | "@\(.)" | cell(magenta) | linkTo($profile)),
@@ -96,6 +134,7 @@ def row:
 | {
     title: (("Pull requests" | cell(bold)) + ("  " | cell("")) + ($repo | cell(cyan) | linkTo("https://github.com/\($repo)"))),
     subtitle: ("\($pulls | length) \($qualifier)shown"
+               + (if $filters == "" then "" else " · \($filters)" end)
                + (if ($pulls | length) == $limit then " (limit reached, raise it with -L)" else "" end)
                + " · \(generatedAt)" | cell(dim)),
     columns: [
@@ -122,18 +161,15 @@ def row:
       ($pulls | map(select(.reviewDecision == "CHANGES_REQUESTED")) | length | tally("changes requested"; red)),
       ($pulls | map(select(any(checks[]; . == "fail"))) | length | tally("failing checks"; red))
     ],
-    empty: "No \($qualifier)pull requests."
+    empty: (if $filters != "" then "No pull requests match." else "No \($qualifier)pull requests." end)
   }
 | table
 '
 
-pulls="$(with_spinner "Loading the pull requests of ${repo}…" gh pr list -R "$repo" --state "$state" --limit "$limit" --json \
+pulls="$(cached_gh "Loading the pull requests of ${repo}…" pr list -R "$repo" --state "$state" --limit "$limit" \
+  ${filter_flags[@]+"${filter_flags[@]}"} --json \
   number,title,state,isDraft,author,headRefName,baseRefName,reviewDecision,statusCheckRollup,additions,deletions,updatedAt)" \
   || fail "could not read the pull requests of $repo"
 
-if [[ "$interactive" == true ]]; then
-  browse pr "$repo" "Pull requests · $repo" "$program" \
-    --arg repo "$repo" --arg state "$state" --argjson limit "$limit" <<<"$pulls"
-else
-  render_table "$program" --arg repo "$repo" --arg state "$state" --argjson limit "$limit" <<<"$pulls"
-fi
+show_table pr "$program" --arg repo "$repo" --arg state "$state" --argjson limit "$limit" --arg filters "$filters" \
+  <<<"$pulls"

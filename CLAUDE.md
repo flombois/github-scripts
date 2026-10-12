@@ -8,13 +8,19 @@ usage and layout; `--help` on each command lists its options.
 
 Every script in `bin/` has the same shape; copy an existing one:
 
-1. `usage`, then the option loop (it splits `--opt=value`, checks values with `needs_value`, and ends
-   with `repo="$(resolve_repo "$repo")"`).
-2. One `gh` call, wrapped in `with_spinner "Loading …"` (a gum spinner on a terminal), whose JSON is
-   captured into a variable, `|| fail "could not read …"`, so a `gh` error stops the script before jq
-   runs.
+1. `usage`, then `script_args=("$@")` and the option loop. The loop splits `--opt=value`, checks
+   values with `needs_value`, and hands unknown options to `shared_option` (`-i`, `--refresh`,
+   `--format`, and the internal `--list-width` that fzf's reload uses). It ends with
+   `check_shared_options` and `repo="$(resolve_repo "$repo")"`.
+2. One `cached_gh "Loading …" <gh arguments>` call: gh behind a gum spinner, with its output cached
+   for 5 minutes in `~/.cache/ghs`. Its JSON is captured into a variable, `|| fail "could not
+   read …"`, so a `gh` error stops the script before jq runs.
 3. A jq `program` that builds `{title, subtitle, columns, rows, footer, empty}` and ends in `| table`,
-   handed to `render_table` with any extra `--arg`s, or to `browse <issue|pr|run>` with `-i` (fzf).
+   handed to `show_table <issue|pr|run> "$program" --arg …`. That prints the table, the
+   `--format json|csv` export, or the fzf browse.
+   - Each row carries `_key: [kind, repo, id]`. In the fzf list these are hidden tab-separated
+     fields, which `lib/browse.sh <action> kind repo id extra` uses for the preview, Enter and
+     ctrl-o.
 
 `issue.sh` is the one command without a table: after steps 1–2 its program prints its own lines
 in parts (`--arg part …`), so the shell can pass the Markdown to glow 3 (`render_markdown`) and
@@ -55,6 +61,8 @@ Table rules, all enforced by `lib/table.jq`:
 - On a terminal the table is framed (`frameTop`/`frameRow`/`frameLine`/`frameDivider`/`frameBottom`)
   and the footer wraps inside it. `--arg view list` prints only the header and rows, for fzf.
 - Footer counts use `tally` (drops zeros) and `plural`.
+- Exports use each cell's text. Mark decoration (tree lines, colour swatches, `—` placeholders,
+  progress bars) with `| decor` so it is left out.
 
 ## Gotchas
 

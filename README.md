@@ -92,6 +92,21 @@ ghs runs -R owner/repo -b main -w CI -L 10
 
 `-R` also accepts a GitHub URL or an SSH remote.
 
+`issues` and `pr` take filters: `-l` label (repeat for several), `-a` assignee and `-A` author
+(`@me` works), `-S` search text in GitHub search syntax, plus `-t` type and `-m` milestone for
+issues, and `-B` base branch and `-r` review requested for pull requests. `issues -s closed|all`
+includes closed issues.
+
+```sh
+ghs issues -l bug -a @me
+ghs issues -t Bug -S "merge conflict"
+ghs pr -r @me
+```
+
+Every table command takes `--format json` or `--format csv` to export the rows' text (pretty-printed
+JSON, or CSV with a header row). Responses are cached for 5 minutes in `~/.cache/ghs`
+(`GHS_CACHE_TTL` sets the seconds), so reopening a view is quick; `--refresh` fetches again.
+
 To read one issue, put its number after `issues` (or `issue`). `-c` adds the comments:
 
 ```sh
@@ -106,7 +121,8 @@ on the right, as on GitHub. Piped output keeps the raw Markdown.
 
 To browse instead, add `-i` to `issues`, `pr` or `runs` (needs fzf). Type to filter the list; the
 issue, pull request or run under the cursor shows in a preview pane (beside the list from 160
-columns, below it otherwise). Enter opens it in full, ctrl-o opens it in the browser, Esc quits.
+columns, below it otherwise). Enter opens it in full, ctrl-o opens it in the browser, ctrl-r reloads
+the list, Esc quits.
 
 ```sh
 ghs issues -i

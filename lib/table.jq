@@ -63,6 +63,9 @@ def hyperlink($url):
 
 def cell($style): [{text: ., style: $style}];
 def linkTo($url): map(.link = $url);
+# Decoration, such as the backlog's tree lines, that --format json and csv leave out.
+def decor: map(.decor = true);
+def cellText: map(select(.decor | not) | .text) | join("") | sub("^ +"; "") | sub(" +$"; "");
 def profileUrl: if startswith("app/") then "https://github.com/apps/\(.[4:])" else "https://github.com/\(.)" end;
 def cellWidth: map(.text | textWidth) | add // 0;
 def joinCells($separator): reduce .[] as $cell ([]; if . == [] then $cell else . + $separator + $cell end);
@@ -116,8 +119,8 @@ def plural($word): if . == 1 then "1 \($word)" else "\(.) \($word)s" end;
 # A five-step bar such as "▰▰▰▱▱ 3/5".
 def progressBar($completed; $total):
   ($completed * 5 / $total | round) as $filled
-  | ("▰" | times($filled) | cell(green))
-    + ("▱" | times(5 - $filled) | cell(dim))
+  | ("▰" | times($filled) | cell(green) | decor)
+    + ("▱" | times(5 - $filled) | cell(dim) | decor)
     + (" \($completed)/\($total)" | cell(""));
 
 # Rounded frames for the terminal, $width columns wide; the labels and lines are rendered strings.
@@ -177,47 +180,60 @@ def fitColumns($rows; $width):
     then del(.[$droppable[-1]]) | fitColumns($rows; $width)
     else {columns: ., widths: $widths} end;
 
+# The fzf list's four tab-separated key fields (kind, repo, id, extra), then the line.
+def keyed($key): ([($key // [])[], "", "", "", ""][0:4] | map(tostring) | join("\t")) + "\t" + .;
+
+def exportRows: . as $table | $table.rows[] | . as $row | [$table.columns[] | {key: .key, value: ($row[.key] // [] | cellText)}];
+
 # Renders {title, subtitle, columns: [{key, header, align?, flex?, max?, drop?}], rows, footer, empty}
 # as lines: framed on a terminal, plain when piped, and only the header and rows with --arg view list
-# (fzf). A narrow terminal leaves out the drop columns.
+# (fzf). A narrow terminal leaves out the drop columns. Rows may carry _key for the list.
+# --arg view json or csv exports the rows' text instead.
 def table:
-  . as $table
-  | ($ARGS.named.view // "") as $view
-  | ($isTerminal and $view != "list") as $framed
-  | (if $framed then $terminalWidth - 3 else $terminalWidth end) as $width
-  | $table.rows as $rows
-  | ($table.columns | fitColumns($rows; $width)) as {columns: $columns, widths: $widths}
-  | ($widths | tableWidth) as $tableWidth
-  | (if $framed or $view == "list" then "" else " " end) as $indent
-  | def line($cells):
-      $indent + ([range(0; $columns | length) as $index
-              | $cells[$index] | renderCell($widths[$index]; $columns[$index].align // "left")] | join("  "))
-      | if $framed then . else sub(" +$"; "") end;
-    def rule: $indent + ("─" | times($tableWidth) | paint(dim));
-    def header: line([$columns[] | .header | cell(dim)]);
-    def body:
-      if $rows == [] then $indent + ($table.empty | paint(dim))
-      else $rows[] | . as $row | line([$columns[] | $row[.key] // []]) end;
-    def footer($footerWidth): ($table.footer | wrapCells($footerWidth; "  ·  " | cell(dim)))[] | $indent + renderInline;
-    if $view == "list" then header, body
-    elif $framed then
-      "",
-      frameTop($table.title | renderInline; $table.subtitle | renderInline; $terminalWidth),
-      ((header, rule, if $rows == [] then empty else body end) | frameRow($tableWidth; $terminalWidth)),
-      (if $rows == [] then body | frameLine($terminalWidth) else empty end),
-      frameDivider($terminalWidth),
-      (footer($terminalWidth - 4) | frameLine($terminalWidth)),
-      frameBottom($terminalWidth),
-      ""
+  ($ARGS.named.view // "") as $view
+  | if $view == "json" then [exportRows | from_entries]
+    elif $view == "csv" then ([.columns[].header] | @csv), (exportRows | map(.value) | @csv)
     else
-      "",
-      " " + ($table.title | renderInline),
-      " " + ($table.subtitle | renderInline),
-      "",
-      header,
-      rule,
-      body,
-      rule,
-      footer(infinite),
-      ""
+      . as $table
+      | ($isTerminal and $view != "list") as $framed
+      | (if $framed then $terminalWidth - 3 else $terminalWidth end) as $width
+      | $table.rows as $rows
+      | ($table.columns | fitColumns($rows; $width)) as {columns: $columns, widths: $widths}
+      | ($widths | tableWidth) as $tableWidth
+      | (if $framed or $view == "list" then "" else " " end) as $indent
+      | def line($cells):
+          $indent + ([range(0; $columns | length) as $index
+                  | $cells[$index] | renderCell($widths[$index]; $columns[$index].align // "left")] | join("  "))
+          | if $framed then . else sub(" +$"; "") end;
+        def rule: $indent + ("─" | times($tableWidth) | paint(dim));
+        def header: line([$columns[] | .header | cell(dim)]);
+        def body:
+          if $rows == [] then $indent + ($table.empty | paint(dim))
+          else $rows[] | . as $row | line([$columns[] | $row[.key] // []]) end;
+        def footer($footerWidth): ($table.footer | wrapCells($footerWidth; "  ·  " | cell(dim)))[] | $indent + renderInline;
+        if $view == "list" then
+          (header | keyed(null)),
+          (if $rows == [] then body | keyed(null)
+           else $rows[] | . as $row | line([$columns[] | $row[.key] // []]) | keyed($row._key) end)
+        elif $framed then
+          "",
+          frameTop($table.title | renderInline; $table.subtitle | renderInline; $terminalWidth),
+          ((header, rule, if $rows == [] then empty else body end) | frameRow($tableWidth; $terminalWidth)),
+          (if $rows == [] then body | frameLine($terminalWidth) else empty end),
+          frameDivider($terminalWidth),
+          (footer($terminalWidth - 4) | frameLine($terminalWidth)),
+          frameBottom($terminalWidth),
+          ""
+        else
+          "",
+          " " + ($table.title | renderInline),
+          " " + ($table.subtitle | renderInline),
+          "",
+          header,
+          rule,
+          body,
+          rule,
+          footer(infinite),
+          ""
+        end
     end;

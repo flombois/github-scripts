@@ -63,7 +63,7 @@ page() {
 with_spinner() {
   local title="$1"
   shift
-  if [[ -t 2 ]] && command -v gum >/dev/null; then
+  if [[ -t 2 && -z "$list_width" ]] && command -v gum >/dev/null; then
     gum spin --spinner dot --title "$title" --show-stdout --show-stderr -- "$@"
   else
     "$@"
@@ -87,53 +87,123 @@ render_markdown() {
     | LC_ALL=C sed -E -e 's/^  //' -e $'s/(\x1b\\[[0-9;]*m| )+$/\x1b[0m/'
 }
 
-# Fails early when -i can't work: it needs fzf and a terminal.
-check_browse() {
-  command -v fzf >/dev/null || fail "-i needs fzf; install it from https://github.com/junegunn/fzf#installation"
-  [[ -t 1 ]] || fail "-i needs a terminal"
+# Options every table command shares; shared_option sets them.
+interactive=false
+refresh=false
+format=table
+list_width=''
+
+# Usage: shared_option "$@"
+# Handles -i, --refresh, --format and the internal --list-width, setting `taken` to the number of
+# arguments used, or 0 when $1 is none of them.
+shared_option() {
+  taken=1
+  case "$1" in
+    -i | --interactive) interactive=true ;;
+    --refresh) refresh=true ;;
+    --format) needs_value "$1" $#; format="$2"; taken=2 ;;
+    --list-width) needs_value "$1" $#; list_width="$2"; taken=2 ;;
+    *) taken=0 ;;
+  esac
 }
 
-# Usage: browse kind repo title program [jq options…] <json
-# Lists the rows of the table program in fzf, with the issue, pull request or run (kind) under the
-# cursor in a preview pane. Enter shows it in full, ctrl-o opens it in the browser.
-browse() {
-  local kind="$1" repo="$2" title="$3" program="$4"
-  shift 4
-  check_browse
-  local width list_width window
-  width="$(terminal_width)"
-  if [[ "$width" -ge 160 ]]; then
-    list_width=$((width / 2 - 7))
-    window="right,50%,border-left"
-  else
-    list_width=$((width - 6))
-    window="down,60%,border-top"
+# Fails early on a bad --format or -i, before anything is fetched.
+check_shared_options() {
+  [[ "$format" =~ ^(table|json|csv)$ ]] || fail "format must be table, json or csv, got: $format"
+  if [[ "$interactive" == true && -z "$list_width" ]]; then
+    [[ "$format" == table ]] || fail "-i and --format can't be combined"
+    command -v fzf >/dev/null || fail "-i needs fzf; install it from https://github.com/junegunn/fzf#installation"
+    [[ -t 1 ]] || fail "-i needs a terminal"
   fi
-  # fzf runs these with $SHELL; {1} is the first column, such as #42.
-  local number='n="$(printf %s {1} | tr -dc 0-9)";'
-  local target view preview enter open
-  target="\"\$n\" -R $(printf %q "$repo")"
-  case "$kind" in
-    issue)
-      view="$(printf %q "$LIB_DIR/../bin/issue.sh") $target"
-      preview="GHS_FORCE_TERMINAL=1 COLUMNS=\"\$FZF_PREVIEW_COLUMNS\" $view"
-      enter="$view -c"
-      open="gh issue view $target --web" ;;
-    pr)
-      preview="GH_FORCE_TTY=\"\$FZF_PREVIEW_COLUMNS\" gh pr view $target"
-      enter="GH_FORCE_TTY=100% gh pr view $target -c | less -RF"
-      open="gh pr view $target --web" ;;
-    run)
-      preview="GH_FORCE_TTY=\"\$FZF_PREVIEW_COLUMNS\" gh run view $target"
-      enter="GH_FORCE_TTY=100% gh run view $target --verbose | less -RF"
-      open="gh run view $target --web" ;;
-  esac
-  render_with true "$list_width" "$program" --arg view list "$@" \
-    | fzf --ansi --header-lines 1 --layout reverse --info inline-right --tiebreak index \
-        --border rounded --border-label " $title " --header "enter view · ctrl-o browser · esc quit" \
-        --preview "$number $preview" --preview-window "$window" \
-        --bind "enter:execute:$number $enter" --bind "ctrl-o:execute-silent:$number $open" \
+}
+
+# Usage: cached_gh title gh-arguments…
+# Runs gh behind the spinner. Its output is kept for GHS_CACHE_TTL seconds (default 300) and reused
+# unless --refresh is given; failures are never kept.
+cached_gh() {
+  local title="$1"
+  shift
+  local dir="${XDG_CACHE_HOME:-$HOME/.cache}/ghs"
+  local file
+  file="$dir/$(printf '%s\n' "$@" | cksum | tr ' ' '-').json"
+  if [[ "$refresh" != true && -f "$file" ]] && [[ "$(file_age "$file")" -lt "${GHS_CACHE_TTL:-300}" ]]; then
+    cat "$file"
+    return
+  fi
+  local output
+  output="$(with_spinner "$title" gh "$@")" || return
+  if mkdir -p "$dir" 2>/dev/null && chmod 700 "$dir"; then
+    printf '%s\n' "$output" >"$file.$$" && mv "$file.$$" "$file"
+  fi
+  printf '%s\n' "$output"
+}
+
+# Seconds since the file was modified; stat's flags differ between GNU and BSD.
+file_age() {
+  local modified
+  modified="$(stat -c %Y "$1" 2>/dev/null || stat -f %m "$1")"
+  echo $(($(date +%s) - modified))
+}
+
+# Usage: show_table kind program [jq options…] <json
+# Prints a table program's output the way the shared options ask: the framed or plain table,
+# --format json or csv, the fzf list (--list-width) or the fzf browse (-i). kind is the browse
+# kind of the rows: issue, pr or run.
+show_table() {
+  local kind="$1" program="$2"
+  shift 2
+  if [[ "$format" != table ]]; then
+    render_with false 1000 "$program" --arg view "$format" "$@"
+  elif [[ -n "$list_width" ]]; then
+    render_with true "$list_width" "$program" --arg view list "$@"
+  elif [[ "$interactive" == true ]]; then
+    local width
+    width="$(terminal_width)"
+    render_with true "$(browse_list_width "$width")" "$program" --arg view list "$@" | browse "$kind" "$width"
+  else
+    render_table "$program" "$@"
+  fi
+}
+
+# The list's width in the fzf browse: the preview sits beside it from 160 columns, below it otherwise.
+browse_list_width() {
+  if [[ "$1" -ge 160 ]]; then echo $(($1 / 2 - 7)); else echo $(($1 - 6)); fi
+}
+
+# Usage: browse kind width <list
+# Browses the list lines in fzf. Each starts with four tab-separated key fields (kind, repo, id,
+# extra) that lib/browse.sh acts on; ctrl-r reloads the list by running this script again.
+browse() {
+  local kind="$1" width="$2"
+  local window="down,60%,border-top"
+  if [[ "$width" -ge 160 ]]; then window="right,50%,border-left"; fi
+  local action reload argument
+  action="$(printf %q "$LIB_DIR/browse.sh")"
+  reload="$(printf %q "$(realpath "$0")")"
+  for argument in ${script_args[@]+"${script_args[@]}"}; do
+    reload+=" $(printf %q "$argument")"
+  done
+  reload+=" --refresh --list-width $(browse_list_width "$width")"
+  local keys='{1} {2} {3} {4}'
+  fzf --ansi --header-lines 1 --delimiter '\t' --with-nth 5.. --layout reverse --info inline-right \
+    --tiebreak index --border rounded --border-label " $(browse_title "$kind") " \
+    --header "$(browse_help "$kind")" \
+    --preview "$action preview $keys" --preview-window "$window" \
+    --bind "enter:execute:$action view $keys" --bind "ctrl-o:execute-silent:$action open $keys" \
+    --bind "ctrl-r:reload:$reload" \
     || { local status=$?; [[ "$status" -eq 130 ]] || return "$status"; }
+}
+
+browse_title() {
+  case "$1" in
+    issue) echo "Issues · $repo" ;;
+    pr) echo "Pull requests · $repo" ;;
+    run) echo "Pipeline runs · $repo" ;;
+  esac
+}
+
+browse_help() {
+  echo "enter view · ctrl-o browser · ctrl-r reload · esc quit"
 }
 
 # Asks the terminal itself: inside $(…), tput sees a pipe and answers 80.
