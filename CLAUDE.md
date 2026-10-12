@@ -22,9 +22,15 @@ Every script in `bin/` has the same shape; copy an existing one:
      fields, which `lib/browse.sh <action> kind repo id extra` uses for the preview, Enter and
      ctrl-o.
 
-`issue.sh` is the one command without a table: after steps 1–2 its program prints its own lines
-in parts (`--arg part …`), so the shell can pass the Markdown to glow 3 (`render_markdown`) and
-`page` the whole issue through `less`.
+`issue.sh` and `pull-request.sh` are the detail views, with no table. `backlog.sh 42` and
+`pull-requests.sh 42` hand over to them when the first argument is a number. Their shared pieces live
+in `lib/detail.jq` (cells, sidebar sections, cards, header box, Markdown cleanup) and `lib/detail.sh`
+(layout, `print_part`, `print_card`, `beside_program`, `frame_program`, `print_detail`). A view sets
+`program="$DETAIL_JQ"'…'` and `item`, defines `print_main`, then calls `detail_layout` and
+`print_detail`.
+
+After steps 1–2, a view's program prints its own lines in parts (`--arg part …`), so the shell can
+pass the Markdown to glow 3 (`render_markdown`) and `page` the whole view through `less`.
 
 - **Piped:** the parts `header|body|subIssues|divider|comments|footer` are printed as raw text.
 - **On a terminal:**
@@ -35,8 +41,11 @@ in parts (`--arg part …`), so the shell can pass the Markdown to glow 3 (`rend
   - Without glow, the cards hold raw Markdown.
 - **Sidebar:** with glow and 110+ columns, `--arg layout sidebar` moves the fields into a
   GitHub-style sidebar. The cards render at the narrower main width, and `beside_program` pads each
-  line to it and appends a sidebar line. `backlog.sh 42` (`ghs issues 42`) hands
-over to it when the first argument is a number.
+  line to it and appends a sidebar line.
+- `pull-request.sh` follows the same pattern. `checks` and `files` are cards drawn in jq
+  (`framedCard`). With `-c`, its `timeline` interleaves comments and reviews, and each entry becomes
+  a card (`entryTitle` + `entry`). `checkOutcome` and `checksCell` live in `table.jq`, shared with the
+  PR table.
 
 A new `bin/<name>.sh` is a `ghs <name>` command with no change to `cli.sh`. Its line-2 comment is
 its description in `ghs --help`, so keep it to one line. Short aliases live in `ALIASES` in

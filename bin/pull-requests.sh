@@ -3,11 +3,18 @@
 set -euo pipefail
 source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
+# `pull-requests 42` shows pull request #42.
+if [[ "${1:-}" =~ ^#?[0-9]+$ ]]; then
+  exec "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/pull-request.sh" "$@"
+fi
+
 usage() {
   cat <<'EOF'
 Usage: pull-requests.sh [-R owner/repo] [-s state] [-L limit] [filters] [-i] [--format f] [--refresh]
+       pull-requests.sh <number> [-c] [-R owner/repo]
 
-Prints the pull requests of a GitHub repository as a table.
+Prints the pull requests of a GitHub repository as a table. With a pull
+request number, shows that pull request instead; see pull-request.sh --help.
 
 Options:
   -R, --repo owner/repo     Repository to read; also accepts a GitHub URL.
@@ -92,27 +99,6 @@ def reviewCell:
     [.reviewDecision // ""]
   // ["—", dim]
   | . as [$text, $style] | $text | cell($style);
-
-def checkOutcome:
-  if .__typename == "StatusContext" then
-    {SUCCESS: "pass", FAILURE: "fail", ERROR: "fail"}[.state] // "pending"
-  elif .status != "COMPLETED" then "pending"
-  else
-    {SUCCESS: "pass", NEUTRAL: "pass", SKIPPED: "pass",
-     FAILURE: "fail", TIMED_OUT: "fail", CANCELLED: "fail", ACTION_REQUIRED: "fail", STARTUP_FAILURE: "fail"}
-      [.conclusion] // "pending"
-  end;
-
-def checks: [(.statusCheckRollup // [])[] | checkOutcome];
-
-def checksCell:
-  checks as $outcomes
-  | ($outcomes | length) as $total
-  | "\($outcomes | map(select(. == "pass")) | length)/\($total)" as $count
-  | if $total == 0 then "—" | cell(dim) | decor
-    elif any($outcomes[]; . == "fail") then "✗ \($count)" | cell(red)
-    elif any($outcomes[]; . == "pending") then "● \($count)" | cell(yellow)
-    else "✓ \($count)" | cell(green) end;
 
 def sizeCell: ("+\(.additions)" | cell(green)) + (" -\(.deletions)" | cell(red));
 

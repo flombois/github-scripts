@@ -79,6 +79,7 @@ ghs <command> [options]
 | `backlog`       | `issues` | Open issues, sub-issues nested under their parent, with type and labels |
 | `issue`         | —        | One issue: state, labels, parent, sub-issues, description and comments  |
 | `pull-requests` | `pr`     | Pull requests with review decision, check results and size              |
+| `pull-request`  | —        | One pull request: reviewers, merge status, checks, files and comments   |
 | `pipeline-runs` | `runs`   | Recent GitHub Actions runs with outcome, duration and success rate      |
 
 Every command reads the repository of the current directory, or the one given with `-R`:
@@ -107,12 +108,18 @@ Every table command takes `--format json` or `--format csv` to export the rows' 
 JSON, or CSV with a header row). Responses are cached for 5 minutes in `~/.cache/ghs`
 (`GHS_CACHE_TTL` sets the seconds), so reopening a view is quick; `--refresh` fetches again.
 
-To read one issue, put its number after `issues` (or `issue`). `-c` adds the comments:
+To read one issue, put its number after `issues` (or `issue`), and likewise for a pull request
+after `pr`. `-c` adds the comments (and, for a pull request, the reviews):
 
 ```sh
 ghs issues 42
 ghs issues 42 -c -R owner/repo
+ghs pr 1234 -c
 ```
+
+A pull request shows who wants to merge what into which branch, then its reviewers (✓ approved,
+✗ changes requested, ● awaited), merge status, checks (failures first) and the files with the most
+changes.
 
 Long issues open in `less` (or `$PAGER`); short ones print directly. With glow installed, the
 description and comments are rendered as Markdown (set `GLAMOUR_STYLE=light` on a light terminal), and

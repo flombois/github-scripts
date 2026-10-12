@@ -78,6 +78,9 @@ def wrapCells($width; $separator):
     elif (.[-1] + $separator + $cell | cellWidth) <= $width then .[-1] += $separator + $cell
     else . + [$cell] end);
 
+# Splits a cell into one cell per word, each keeping its style and link, for wrapCells.
+def words: [.[] as $segment | $segment.text | split(" ")[] | select(. != "") | [$segment + {text: .}]];
+
 def clipCell($width):
   if cellWidth <= $width then .
   else
@@ -115,6 +118,28 @@ def tally($label; $style): if . > 0 then "\(.) \($label)" | cell($style) else em
 
 
 def plural($word): if . == 1 then "1 \($word)" else "\(.) \($word)s" end;
+
+# A pull request check as pass, fail or pending; checks gives them all for a PR.
+def checkOutcome:
+  if .__typename == "StatusContext" then
+    {SUCCESS: "pass", FAILURE: "fail", ERROR: "fail"}[.state] // "pending"
+  elif .status != "COMPLETED" then "pending"
+  else
+    {SUCCESS: "pass", NEUTRAL: "pass", SKIPPED: "pass",
+     FAILURE: "fail", TIMED_OUT: "fail", CANCELLED: "fail", ACTION_REQUIRED: "fail", STARTUP_FAILURE: "fail"}
+      [.conclusion] // "pending"
+  end;
+
+def checks: [(.statusCheckRollup // [])[] | checkOutcome];
+
+def checksCell:
+  checks as $outcomes
+  | ($outcomes | length) as $total
+  | "\($outcomes | map(select(. == "pass")) | length)/\($total)" as $count
+  | if $total == 0 then "—" | cell(dim) | decor
+    elif any($outcomes[]; . == "fail") then "✗ \($count)" | cell(red)
+    elif any($outcomes[]; . == "pending") then "● \($count)" | cell(yellow)
+    else "✓ \($count)" | cell(green) end;
 
 # A five-step bar such as "▰▰▰▱▱ 3/5".
 def progressBar($completed; $total):

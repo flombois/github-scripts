@@ -13,7 +13,7 @@ BIN_DIR="$LIB_DIR/../bin"
 preview() {
   case "$kind" in
     issue) GHS_FORCE_TERMINAL=1 COLUMNS="$FZF_PREVIEW_COLUMNS" "$BIN_DIR/issue.sh" "$id" -R "$repo" ;;
-    pr) GH_FORCE_TTY="$FZF_PREVIEW_COLUMNS" gh pr view "$id" -R "$repo" ;;
+    pr) GHS_FORCE_TERMINAL=1 COLUMNS="$FZF_PREVIEW_COLUMNS" "$BIN_DIR/pull-request.sh" "$id" -R "$repo" ;;
     run) GH_FORCE_TTY="$FZF_PREVIEW_COLUMNS" gh run view "$id" -R "$repo" ;;
   esac
 }
@@ -21,7 +21,7 @@ preview() {
 view() {
   case "$kind" in
     issue) "$BIN_DIR/issue.sh" "$id" -c -R "$repo" ;;
-    pr) GH_FORCE_TTY=100% gh pr view "$id" -c -R "$repo" | less -RF ;;
+    pr) "$BIN_DIR/pull-request.sh" "$id" -c -R "$repo" ;;
     run) GH_FORCE_TTY=100% gh run view "$id" --verbose -R "$repo" | less -RF ;;
   esac
 }
