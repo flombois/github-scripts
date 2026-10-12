@@ -47,7 +47,7 @@ pass the Markdown to glow 3 (`render_markdown`) and `page` the whole view throug
 - **Sidebar:** with glow and 110+ columns, `--arg layout sidebar` moves the fields into a
   GitHub-style sidebar. The cards render at the narrower main width, and `beside_program` pads each
   line to it and appends a sidebar line.
-- `repo.sh` reuses `detail.sh` without a sidebar. Its `left` and `right` parts are columns of
+- `info.sh` reuses `detail.sh` without a sidebar. Its `left` and `right` parts are columns of
   `framedCard`s, put side by side with `beside_program` from 120 columns. It merges three fetches:
   GraphQL, `gh run list` and contributors, the last two passed as `--argjson runs` and
   `contributors`.
@@ -55,6 +55,23 @@ pass the Markdown to glow 3 (`render_markdown`) and `page` the whole view throug
   (`framedCard`). With `-c`, its `timeline` interleaves comments and reviews, and each entry becomes
   a card (`entryTitle` + `entry`). `checkOutcome` and `checksCell` live in `table.jq`, shared with the
   PR table.
+
+`ghs settings` is `bin/settings.sh` (the general settings) plus subcommands in `bin/settings/`
+(`rules`, `secrets` for both secrets and variables, `labels`), each a table script of the usual shape.
+`cli.sh` only lists `bin/*.sh`, so the subcommands don't show as commands.
+
+- **Verbs:** each takes positional verbs after its options: public ones (`set`, `delete`, `create`,
+  `edit`, `show`) and hidden ones for the fzf browse (`change`, `new`), which ask on `/dev/tty`
+  through `lib/prompt.sh` (`confirm`, `ask`, `ask_hidden`, `choose`, `act`, `pause`).
+- **Setting definitions:** `settings.sh` keeps one `definitions` jq list (key, label, kind, gh flag,
+  current value, choices, help). The table, `set`, the preview and the completion
+  (`settings __keys`, `__values`) all read it, so a new setting is one entry there.
+- **After a write:** call `forget_cached` with the same gh arguments as the read, so the next view
+  fetches again.
+- **Browse:** a kind's `key_actions` can rebind `enter` (settings and secrets change the value). Actions
+  named `new…` get the kind and repository instead of the row's keys, so they work on an empty list.
+- **Fetching:** GraphQL can't read where an inherited ruleset comes from, so `rules.sh` merges in the
+  REST ruleset list.
 
 A new `bin/<name>.sh` is a `ghs <name>` command with no change to `cli.sh`. Its line-2 comment is
 its description in `ghs --help`, so keep it to one line. Short aliases live in `ALIASES` in

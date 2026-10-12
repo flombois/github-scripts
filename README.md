@@ -83,7 +83,8 @@ ghs <command> [options]
 | `actions`       | `runs`  | Recent GitHub Actions workflow runs with outcome, duration and success rate |
 | `notifications` | `inbox` | Your unread notifications across repositories, with type and reason     |
 | `releases`      | —       | Releases with latest / pre-release / draft status, assets and downloads |
-| `repo`          | —       | Overview: stats, recent merges and commits, CI health per workflow, latest release, top contributors |
+| `info`          | —       | Overview: stats, recent merges and commits, CI health per workflow, latest release, top contributors |
+| `settings`      | —       | Settings, rulesets, secrets and variables, and labels; view and change them |
 | `completion`    | —       | Prints the tab completion script for bash or zsh                        |
 
 Every command reads the repository of the current directory, or the one given with `-R`:
@@ -154,8 +155,8 @@ ghs pr -s all -i
 To follow CI, `--watch` redraws every 5 seconds (or `--watch 10`) and stops once nothing is queued or
 running: `ghs actions --watch` for the runs table, `ghs pr 42 --watch` for a pull request's checks.
 
-For tab completion of commands, options, states, formats, workflow names, branches and repositories,
-add this line to `~/.zshrc` (or `bash` to `~/.bashrc`):
+For tab completion of commands, options, states, formats, workflow names, branches, repositories and
+settings, add this line to `~/.zshrc` (or `bash` to `~/.bashrc`):
 
 ```sh
 eval "$(ghs completion zsh)"
@@ -172,14 +173,52 @@ titles, runs, people, labels and the repository are clickable links in terminals
 (iTerm2, kitty, WezTerm, GNOME Terminal, Windows Terminal…). Piped output has no colours, links,
 frames, spinner or clipping.
 
+## Settings
+
+`ghs settings` lists a repository's general, feature and pull request settings. Change one with
+`set`, or with `-i`, where Enter on a setting asks for its new value. Changes need admin access,
+and each one is confirmed in `-i`:
+
+```sh
+ghs settings
+ghs settings set wiki off
+ghs settings set topics "cli bash jq"
+ghs settings set squash-message pr-title-description
+ghs settings set visibility private --yes     # asks first without --yes
+ghs settings -i
+```
+
+`ghs settings --help` lists the settings and their values. The rest have their own subcommands, each
+with a table, `-i`, `--format` and `--help`:
+
+| Subcommand | Shows | Changes |
+|------------|-------|---------|
+| `rules` | Rulesets (the repository's and those it inherits) and classic branch protection, with what they protect | `set <ruleset> active\|evaluate\|disabled`; in `-i`, alt-e enforce · alt-v evaluate · alt-x disable |
+| `secrets`, `variables` | Actions secrets (names only) and variables (with values) | `set <name> [value]`, `delete <name>`; in `-i`, Enter new value · alt-n new secret · alt-v new variable · alt-x delete |
+| `labels` | Labels with colour, description, and their open issues and pull requests | `create`, `edit`, `delete`; in `-i`, alt-n new · alt-e edit · alt-x delete, Enter lists the label's issues |
+
+```sh
+ghs settings rules show "Protect main"
+ghs settings rules set 4898070 disabled
+ghs settings secrets set NPM_TOKEN < token.txt      # or no value: asked for, hidden
+ghs settings variables set REGION eu-west-1
+ghs settings labels create triage -c fbca04 -d "Needs a first look"
+ghs settings labels edit triage -n needs-triage
+```
+
+Leave the value out for a secret: it is then read from standard input or a hidden prompt, so it
+stays out of your shell history, and ghs hands it to gh through standard input. Deleting a secret, variable or label asks first, or takes `--yes` in scripts. Rulesets inherited from
+an organisation, and classic branch protection, are shown but change on github.com.
+
 ## Layout
 
 - `cli.sh` — the `ghs` entry point: routes `ghs <command>` to `bin/<command>.sh`, and holds the aliases
 - `install.sh`, `uninstall.sh` — add and remove the `github-scripts` and `ghs` links
 - `bin/` — one script per command: options, the `gh` query, and the columns of its table (`issue.sh`
-  prints one issue instead of a table)
+  prints one issue instead of a table); `bin/settings/` holds the `ghs settings` subcommands
 - `lib/common.sh` — option helpers, repository detection, the `jq` call, paging, glow, the gum
   spinner and the fzf browse
+- `lib/browse.sh`, `lib/prompt.sh` — the fzf browse's previews and actions, and the questions they ask
 - `lib/install.sh` — link names and output helpers shared by the installer and uninstaller
 - `lib/packages.sh` — platform detection, requirement checks and package installs for the installer
 - `lib/table.jq` — table rendering and frames shared by every command; a cell is a list of

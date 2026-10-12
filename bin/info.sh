@@ -6,7 +6,7 @@ source "$LIB_DIR/detail.sh"
 
 usage() {
   cat <<'EOF'
-Usage: repo.sh [-R owner/repo] [--refresh]
+Usage: info.sh [-R owner/repo] [--refresh]
 
 Prints an overview of a GitHub repository: its description and stats, recent
 merged pull requests and commits, the success rate of each workflow over the

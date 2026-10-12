@@ -123,9 +123,9 @@ check_shared_options() {
 cached_gh() {
   local title="$1"
   shift
-  local dir="${XDG_CACHE_HOME:-$HOME/.cache}/ghs"
-  local file
-  file="$dir/$(printf '%s\n' "$@" | cksum | tr ' ' '-').json"
+  local dir file
+  dir="$(cache_dir)"
+  file="$(cache_file "$@")"
   if [[ "$refresh" != true && -f "$file" ]] && [[ "$(file_age "$file")" -lt "${GHS_CACHE_TTL:-300}" ]]; then
     cat "$file"
     return
@@ -138,6 +138,20 @@ cached_gh() {
   printf '%s\n' "$output"
 }
 
+cache_dir() {
+  echo "${XDG_CACHE_HOME:-$HOME/.cache}/ghs"
+}
+
+cache_file() {
+  echo "$(cache_dir)/$(printf '%s\n' "$@" | cksum | tr ' ' '-').json"
+}
+
+# Usage: forget_cached gh-arguments…
+# Drops a cached response after a change, so the next view fetches it again.
+forget_cached() {
+  rm -f "$(cache_file "$@")"
+}
+
 # Seconds since the file was modified; stat's flags differ between GNU and BSD.
 file_age() {
   local modified
@@ -148,7 +162,8 @@ file_age() {
 # Usage: show_table kind program [jq options…] <json
 # Prints a table program's output the way the shared options ask: the framed or plain table,
 # --format json or csv, the fzf list (--list-width) or the fzf browse (-i). kind is the browse
-# kind: issue, pr, run, release, or notification (whose rows each name their own kind).
+# kind: issue, pr, run, release, setting, ruleset, label, or notification and secret (whose rows each
+# name their own kind).
 show_table() {
   local kind="$1" program="$2"
   shift 2
@@ -187,21 +202,29 @@ browse() {
   local keys='{1} {2} {3} {4}'
   local binds=(--bind "enter:execute:$action view $keys" --bind "ctrl-o:execute-silent:$action open $keys"
     --bind "ctrl-r:reload:$reload")
-  # key:action:reload, the last part saying whether the list may have changed.
-  local key_actions=() key_action name
+  # key:action:reload, the last part saying whether the list may have changed. A later binding
+  # replaces an earlier one, such as enter.
+  local key_actions=() key_action name item_keys
   case "$kind" in
     issue) key_actions=(alt-a:assign:1 alt-c:comment:1 alt-x:close:1) ;;
     pr) key_actions=(alt-k:checkout:0 alt-a:approve:1 alt-m:merge:1 alt-c:comment:1) ;;
     run) key_actions=(alt-r:rerun:1 alt-l:logs:0 alt-w:watch:1) ;;
     notification) key_actions=(alt-d:read:1) ;;
+    setting) key_actions=(enter:change:1) ;;
+    ruleset) key_actions=(alt-e:active:1 alt-v:evaluate:1 alt-x:disabled:1) ;;
+    secret) key_actions=(enter:change:1 alt-n:new-secret:1 alt-v:new-variable:1 alt-x:delete:1) ;;
+    label) key_actions=(alt-n:new:1 alt-e:change:1 alt-x:delete:1) ;;
   esac
   for key_action in ${key_actions[@]+"${key_actions[@]}"}; do
     name="${key_action#*:}"
     name="${name%:*}"
+    # Creating needs no item under the cursor, so it works on an empty list too.
+    item_keys="$keys"
+    if [[ "$name" == new* ]]; then item_keys="$kind $(printf %q "$repo") '' ''"; fi
     if [[ "${key_action##*:}" == 1 ]]; then
-      binds+=(--bind "${key_action%%:*}:execute[$action $name $keys]+reload[$reload]")
+      binds+=(--bind "${key_action%%:*}:execute[$action $name $item_keys]+reload[$reload]")
     else
-      binds+=(--bind "${key_action%%:*}:execute[$action $name $keys]")
+      binds+=(--bind "${key_action%%:*}:execute[$action $name $item_keys]")
     fi
   done
   fzf --ansi --header-lines 1 --delimiter '\t' --with-nth 5.. --layout reverse --info inline-right \
@@ -218,16 +241,28 @@ browse_title() {
     run) echo "Actions · $repo" ;;
     notification) echo "Notifications${repo:+ · $repo}" ;;
     release) echo "Releases · $repo" ;;
+    setting) echo "Settings · $repo" ;;
+    ruleset) echo "Rules · $repo" ;;
+    secret) echo "Secrets and variables · $repo" ;;
+    label) echo "Labels · $repo" ;;
   esac
 }
 
 browse_help() {
-  echo "enter view · ctrl-o browser · ctrl-r reload · esc quit"
+  local enter="enter view"
+  case "$1" in
+    setting | secret) enter="enter change" ;;
+    label) enter="enter issues" ;;
+  esac
+  echo "$enter · ctrl-o browser · ctrl-r reload · esc quit"
   case "$1" in
     issue) echo "alt-a assign me · alt-c comment · alt-x close" ;;
     pr) echo "alt-k check out · alt-a approve · alt-m merge · alt-c comment" ;;
     run) echo "alt-r re-run failed · alt-l failed logs · alt-w watch" ;;
     notification) echo "alt-d mark as read" ;;
+    ruleset) echo "alt-e enforce · alt-v evaluate only · alt-x disable" ;;
+    secret) echo "alt-n new secret · alt-v new variable · alt-x delete" ;;
+    label) echo "alt-n new · alt-e edit · alt-x delete" ;;
   esac
 }
 

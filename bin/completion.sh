@@ -35,6 +35,20 @@ _ghs() {
     COMPREPLY=($(compgen -W "$("$ghs" __commands)" -- "$cur"))
     return
   fi
+  # ghs settings [set <setting> <value> | rules | secrets | variables | labels] [verb]
+  local sub=""
+  if [[ "${COMP_WORDS[1]}" == settings && "$cur" != -* ]]; then
+    if [[ "$COMP_CWORD" -ge 3 ]]; then sub="${COMP_WORDS[2]}"; fi
+    case "$COMP_CWORD:$sub" in
+      2:) COMPREPLY=($(compgen -W $'set\nrules\nsecrets\nvariables\nlabels' -- "$cur")); return ;;
+      3:set) COMPREPLY=($(compgen -W "$("$ghs" settings __keys)" -- "$cur")); return ;;
+      4:set) COMPREPLY=($(compgen -W "$("$ghs" settings __values "${COMP_WORDS[3]}")" -- "$cur")); return ;;
+      3:rules) COMPREPLY=($(compgen -W $'show\nset' -- "$cur")); return ;;
+      3:secrets | 3:variables) COMPREPLY=($(compgen -W $'set\ndelete' -- "$cur")); return ;;
+      3:labels) COMPREPLY=($(compgen -W $'create\nedit\ndelete' -- "$cur")); return ;;
+      5:rules) COMPREPLY=($(compgen -W $'active\nevaluate\ndisabled' -- "$cur")); return ;;
+    esac
+  fi
   case "$prev" in
     -s | --state) COMPREPLY=($(compgen -W $'open\nclosed\nmerged\nall' -- "$cur")) ;;
     --format) COMPREPLY=($(compgen -W $'table\njson\ncsv' -- "$cur")) ;;
@@ -47,7 +61,8 @@ _ghs() {
         | sed -nE 's#.*github\.com[:/]([^/ ]+/[^/ ]+)( .*)?$#\1#p' | sed 's#\.git$##' | sort -u)" -- "$cur")) ;;
     *)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "$("$ghs" __options "${COMP_WORDS[1]}")" -- "$cur"))
+        if [[ "${COMP_WORDS[1]}" == settings && "$COMP_CWORD" -ge 3 ]]; then sub="${COMP_WORDS[2]}"; fi
+        COMPREPLY=($(compgen -W "$("$ghs" __options "${COMP_WORDS[1]}" "$sub")" -- "$cur"))
       fi
       ;;
   esac

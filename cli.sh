@@ -53,9 +53,12 @@ list_commands() {
   for pair in "${ALIASES[@]}"; do echo "${pair%% *}"; done
 }
 
+# Usage: list_options command [subcommand]
 list_options() {
   local script
   script="$ROOT_DIR/bin/$(resolve_alias "$1").sh"
+  if [[ -n "${2:-}" && -x "$ROOT_DIR/bin/$1/$2.sh" ]]; then script="$ROOT_DIR/bin/$1/$2.sh"; fi
+  if [[ "$1 ${2:-}" == "settings variables" ]]; then script="$ROOT_DIR/bin/settings/secrets.sh"; fi
   [[ -x "$script" ]] || return 0
   "$script" --help 2>/dev/null | grep -oE -- '(^|[ ,])--?[a-zA-Z][a-zA-Z-]*' | tr -d ' ,' | sort -u
 }
@@ -67,7 +70,7 @@ case "$1" in
     set -- "$2" --help
     ;;
   __commands) list_commands; exit 0 ;;
-  __options) list_options "${2:-}"; exit 0 ;;
+  __options) list_options "${2:-}" "${3:-}"; exit 0 ;;
 esac
 
 command="$(resolve_alias "$1")"

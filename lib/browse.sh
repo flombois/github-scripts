@@ -2,6 +2,7 @@
 # Acts on the item under the cursor in an fzf browse; fzf runs it as browse.sh action kind repo id extra.
 set -euo pipefail
 source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/common.sh"
+source "$LIB_DIR/prompt.sh"
 
 action="$1"
 kind="$2"
@@ -9,6 +10,7 @@ repo="$3"
 id="$4"
 extra="${5:-}"
 BIN_DIR="$LIB_DIR/../bin"
+SETTINGS_DIR="$BIN_DIR/settings"
 
 # Shows the item in the preview pane, which is a pipe: our views are told it is a terminal.
 preview() {
@@ -18,6 +20,10 @@ preview() {
     run) GH_FORCE_TTY="$FZF_PREVIEW_COLUMNS" gh run view "$id" -R "$repo" ;;
     link) printf '%s\n\n%s\n' "Enter or ctrl-o opens it in the browser:" "$id" ;;
     release) GH_FORCE_TTY="$FZF_PREVIEW_COLUMNS" gh release view "$id" -R "$repo" ;;
+    setting) COLUMNS="$FZF_PREVIEW_COLUMNS" "$BIN_DIR/settings.sh" show "$id" -R "$repo" ;;
+    ruleset | branch-rule) GHS_FORCE_TERMINAL=1 COLUMNS="$FZF_PREVIEW_COLUMNS" "$SETTINGS_DIR/rules.sh" show "$id" -R "$repo" ;;
+    secret | variable) "$SETTINGS_DIR/secrets.sh" "$kind" show "$id" -R "$repo" ;;
+    label) COLUMNS="$FZF_PREVIEW_COLUMNS" "$SETTINGS_DIR/labels.sh" show "$id" -R "$repo" ;;
   esac
 }
 
@@ -28,6 +34,8 @@ view() {
     run) GH_FORCE_TTY=100% gh run view "$id" --verbose -R "$repo" | less -RF ;;
     link) open_url "$id" ;;
     release) GH_FORCE_TTY=100% gh release view "$id" -R "$repo" | less -RF ;;
+    ruleset | branch-rule) "$SETTINGS_DIR/rules.sh" show "$id" -R "$repo" ;;
+    label) "$BIN_DIR/issues.sh" -l "$id" -R "$repo" ;;
   esac
 }
 
@@ -38,6 +46,12 @@ open_in_browser() {
     run) gh run view "$id" -R "$repo" --web ;;
     release) gh release view "$id" -R "$repo" --web ;;
     link) open_url "$id" ;;
+    setting) open_url "https://github.com/$repo/settings" ;;
+    ruleset) open_url "https://github.com/$repo/rules/$id" ;;
+    branch-rule) open_url "https://github.com/$repo/settings/branches" ;;
+    secret) open_url "https://github.com/$repo/settings/secrets/actions" ;;
+    variable) open_url "https://github.com/$repo/settings/variables/actions" ;;
+    label) open_url "$extra" ;;
   esac
 }
 
@@ -49,40 +63,6 @@ open_url() {
   fi
 }
 
-# fzf hands the terminal over without clearing it.
-clear_screen() {
-  printf '\033[H\033[2J' >/dev/tty
-}
-
-# Asks on the terminal, with gum when it is there; fzf owns stdin, so read /dev/tty.
-confirm() {
-  if command -v gum >/dev/null; then
-    gum confirm "$1" </dev/tty >/dev/tty
-  else
-    local answer
-    printf '%s [y/N] ' "$1" >/dev/tty
-    read -r answer </dev/tty
-    [[ "$answer" == [yY]* ]]
-  fi
-}
-
-# Leaves the outcome on screen until a key is pressed.
-pause() {
-  printf '\nPress any key to go back to the list.' >/dev/tty
-  read -rsn1 </dev/tty || true
-}
-
-# Usage: act description command…
-# Runs an action that changes something on GitHub once confirmed, then pauses on its outcome.
-act() {
-  local description="$1"
-  shift
-  clear_screen
-  confirm "$description?" || return 0
-  "$@" || true
-  pause
-}
-
 checkout() {
   clear_screen
   local here
@@ -92,14 +72,6 @@ checkout() {
   else
     gh pr checkout "$id" -R "$repo" || true
   fi
-  pause
-}
-
-# Usage: interactive command…
-# Runs a command that asks its own questions (gh's merge prompt, a comment editor), then pauses.
-interactive() {
-  clear_screen
-  "$@" </dev/tty >/dev/tty || true
   pause
 }
 
@@ -120,5 +92,24 @@ case "$kind:$action" in
   run:logs) gh run view "$id" -R "$repo" --log-failed | less -RF ;;
   run:watch) interactive gh run watch "$id" -R "$repo" ;;
   *:read) gh api -X PATCH "notifications/threads/$extra" --silent ;;
-  *) fail "no $action action for a $kind" ;;
+  setting:change) "$BIN_DIR/settings.sh" change "$id" -R "$repo" ;;
+  ruleset:active | ruleset:evaluate | ruleset:disabled) "$SETTINGS_DIR/rules.sh" change "$id" "$action" -R "$repo" ;;
+  branch-rule:active | branch-rule:evaluate | branch-rule:disabled)
+    clear_screen
+    echo "Classic branch protection rules change on github.com: ctrl-o opens the page." >/dev/tty
+    pause
+    ;;
+  secret:new-secret) "$SETTINGS_DIR/secrets.sh" secret new -R "$repo" ;;
+  secret:new-variable) "$SETTINGS_DIR/secrets.sh" variable new -R "$repo" ;;
+  secret:change | variable:change) "$SETTINGS_DIR/secrets.sh" "$kind" change "$id" -R "$repo" ;;
+  secret:delete | variable:delete)
+    act "Delete the $kind $id of $repo" "$SETTINGS_DIR/secrets.sh" "$kind" delete "$id" -R "$repo" --yes ;;
+  label:new) "$SETTINGS_DIR/labels.sh" new -R "$repo" ;;
+  label:change) "$SETTINGS_DIR/labels.sh" change "$id" -R "$repo" ;;
+  label:delete) act "Delete the label \"$id\" from $repo and its issues" "$SETTINGS_DIR/labels.sh" delete "$id" -R "$repo" --yes ;;
+  *)
+    clear_screen
+    echo "There is no $action action for this $kind." >/dev/tty
+    pause
+    ;;
 esac
