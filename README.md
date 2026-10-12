@@ -129,7 +129,14 @@ on the right, as on GitHub. Piped output keeps the raw Markdown.
 To browse instead, add `-i` to `issues`, `pr` or `runs` (needs fzf). Type to filter the list; the
 issue, pull request or run under the cursor shows in a preview pane (beside the list from 160
 columns, below it otherwise). Enter opens it in full, ctrl-o opens it in the browser, ctrl-r reloads
-the list, Esc quits.
+the list, Esc quits. Alt keys act on the item, then reload the list; changes ask for confirmation
+first:
+
+| Browsing | Keys |
+|----------|------|
+| issues   | alt-a assign to me · alt-c comment · alt-x close |
+| pr       | alt-k check out (in a clone of the repository) · alt-a approve · alt-m merge (gh asks how) · alt-c comment |
+| runs     | alt-r re-run failed jobs · alt-l failed logs · alt-w watch |
 
 ```sh
 ghs issues -i

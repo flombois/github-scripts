@@ -185,12 +185,28 @@ browse() {
   done
   reload+=" --refresh --list-width $(browse_list_width "$width")"
   local keys='{1} {2} {3} {4}'
+  local binds=(--bind "enter:execute:$action view $keys" --bind "ctrl-o:execute-silent:$action open $keys"
+    --bind "ctrl-r:reload:$reload")
+  # key:action:reload, the last part saying whether the list may have changed.
+  local key_actions=() key_action name
+  case "$kind" in
+    issue) key_actions=(alt-a:assign:1 alt-c:comment:1 alt-x:close:1) ;;
+    pr) key_actions=(alt-k:checkout:0 alt-a:approve:1 alt-m:merge:1 alt-c:comment:1) ;;
+    run) key_actions=(alt-r:rerun:1 alt-l:logs:0 alt-w:watch:1) ;;
+  esac
+  for key_action in ${key_actions[@]+"${key_actions[@]}"}; do
+    name="${key_action#*:}"
+    name="${name%:*}"
+    if [[ "${key_action##*:}" == 1 ]]; then
+      binds+=(--bind "${key_action%%:*}:execute[$action $name $keys]+reload[$reload]")
+    else
+      binds+=(--bind "${key_action%%:*}:execute[$action $name $keys]")
+    fi
+  done
   fzf --ansi --header-lines 1 --delimiter '\t' --with-nth 5.. --layout reverse --info inline-right \
     --tiebreak index --border rounded --border-label " $(browse_title "$kind") " \
     --header "$(browse_help "$kind")" \
-    --preview "$action preview $keys" --preview-window "$window" \
-    --bind "enter:execute:$action view $keys" --bind "ctrl-o:execute-silent:$action open $keys" \
-    --bind "ctrl-r:reload:$reload" \
+    --preview "$action preview $keys" --preview-window "$window" "${binds[@]}" \
     || { local status=$?; [[ "$status" -eq 130 ]] || return "$status"; }
 }
 
@@ -204,6 +220,11 @@ browse_title() {
 
 browse_help() {
   echo "enter view · ctrl-o browser · ctrl-r reload · esc quit"
+  case "$1" in
+    issue) echo "alt-a assign me · alt-c comment · alt-x close" ;;
+    pr) echo "alt-k check out · alt-a approve · alt-m merge · alt-c comment" ;;
+    run) echo "alt-r re-run failed · alt-l failed logs · alt-w watch" ;;
+  esac
 }
 
 # Asks the terminal itself: inside $(…), tput sees a pipe and answers 80.

@@ -21,6 +21,9 @@ Every script in `bin/` has the same shape; copy an existing one:
    - Each row carries `_key: [kind, repo, id]`. In the fzf list these are hidden tab-separated
      fields, which `lib/browse.sh <action> kind repo id extra` uses for the preview, Enter and
      ctrl-o.
+   - The alt-key actions are `kind:action` cases in `browse.sh`, bound in `browse()`
+     (`key_actions`). Changes go through `act` (clear the screen, confirm with gum or y/N on
+     `/dev/tty`, run, pause). Commands that prompt themselves go through `interactive`.
 
 `issue.sh` and `pull-request.sh` are the detail views, with no table. `backlog.sh 42` and
 `pull-requests.sh 42` hand over to them when the first argument is a number. Their shared pieces live
@@ -82,6 +85,8 @@ Table rules, all enforced by `lib/table.jq`:
 - `GHS_FORCE_TERMINAL=1` makes `on_terminal` true and stops `page` paging. fzf previews need it,
   since their stdout is a pipe. Previews of PRs and runs use gh's own `GH_FORCE_TTY` instead.
 - In bash 3.2, `"$repo…"` reads the `…` bytes as part of the name; write `"${repo}…"`.
+- To test browse actions, put a recording `gh` stub first on the `PATH` instead of acting on a real
+  repository.
 - fzf can't be scripted under `script`. To see its screen, run it in a pty and render the output
   with pyte (a Python VT emulator). To check a preview, run its command by hand with
   `GHS_FORCE_TERMINAL=1 COLUMNS=60`.

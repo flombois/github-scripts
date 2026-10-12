@@ -34,11 +34,75 @@ open_in_browser() {
   esac
 }
 
+# fzf hands the terminal over without clearing it.
+clear_screen() {
+  printf '\033[H\033[2J' >/dev/tty
+}
+
+# Asks on the terminal, with gum when it is there; fzf owns stdin, so read /dev/tty.
+confirm() {
+  if command -v gum >/dev/null; then
+    gum confirm "$1" </dev/tty >/dev/tty
+  else
+    local answer
+    printf '%s [y/N] ' "$1" >/dev/tty
+    read -r answer </dev/tty
+    [[ "$answer" == [yY]* ]]
+  fi
+}
+
+# Leaves the outcome on screen until a key is pressed.
+pause() {
+  printf '\nPress any key to go back to the list.' >/dev/tty
+  read -rsn1 </dev/tty || true
+}
+
+# Usage: act description command…
+# Runs an action that changes something on GitHub once confirmed, then pauses on its outcome.
+act() {
+  local description="$1"
+  shift
+  clear_screen
+  confirm "$description?" || return 0
+  "$@" || true
+  pause
+}
+
+checkout() {
+  clear_screen
+  local here
+  here="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
+  if [[ "$here" != "$repo" ]]; then
+    echo "Can't check out #$id here: $(pwd) is not a clone of $repo." >/dev/tty
+  else
+    gh pr checkout "$id" -R "$repo" || true
+  fi
+  pause
+}
+
+# Usage: interactive command…
+# Runs a command that asks its own questions (gh's merge prompt, a comment editor), then pauses.
+interactive() {
+  clear_screen
+  "$@" </dev/tty >/dev/tty || true
+  pause
+}
+
 # The header and an empty list have no item.
 [[ -n "$kind" ]] || exit 0
-case "$action" in
-  preview) preview ;;
-  view) view ;;
-  open) open_in_browser ;;
-  *) fail "unknown action: $action" ;;
+case "$kind:$action" in
+  *:preview) preview ;;
+  *:view) view ;;
+  *:open) open_in_browser ;;
+  issue:assign) act "Assign issue #$id of $repo to you" gh issue edit "$id" -R "$repo" --add-assignee @me ;;
+  issue:comment) interactive gh issue comment "$id" -R "$repo" ;;
+  issue:close) act "Close issue #$id of $repo" gh issue close "$id" -R "$repo" ;;
+  pr:checkout) checkout ;;
+  pr:approve) act "Approve pull request #$id of $repo" gh pr review "$id" -R "$repo" --approve ;;
+  pr:merge) interactive gh pr merge "$id" -R "$repo" ;;
+  pr:comment) interactive gh pr comment "$id" -R "$repo" ;;
+  run:rerun) act "Re-run the failed jobs of run $id" gh run rerun "$id" -R "$repo" --failed ;;
+  run:logs) gh run view "$id" -R "$repo" --log-failed | less -RF ;;
+  run:watch) interactive gh run watch "$id" -R "$repo" ;;
+  *) fail "no $action action for a $kind" ;;
 esac
