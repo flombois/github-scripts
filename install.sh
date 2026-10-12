@@ -13,6 +13,10 @@ the package manager of this macOS or Linux machine, then links github-scripts
 and its short name ghs to cli.sh in this clone. Run it again after moving the
 clone.
 
+On Nix it prints the packages to declare instead of installing anything; with
+flakes, 'nix profile install github:flombois/github-scripts' needs no linking
+at all. See the Nix section of the README.
+
 Three tools are optional: glow 3 renders issue Markdown, gum shows a spinner
 while loading, and fzf powers the interactive browse (-i). They are offered
 through Homebrew; elsewhere the installer prints where to get them.

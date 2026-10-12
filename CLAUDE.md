@@ -110,6 +110,18 @@ Table rules, all enforced by `lib/table.jq`:
 - Exports use each cell's text. Mark decoration (tree lines, colour swatches, `—` placeholders,
   progress bars) with `| decor` so it is left out.
 
+## Nix
+
+`flake.nix` exposes `packages.default` (also `.ghs`), `overlays.default` and a `nix develop` shell;
+the derivation is `nix/package.nix`. It copies `cli.sh`, `bin/` and `lib/` into
+`$out/share/github-scripts`, symlinks `ghs` and `github-scripts` beside `cli.sh`, and wraps each
+link with every tool on its `PATH` (`runtimeInputs`). The links matter: a shebang script's `$0` is
+its own path whatever the wrapper's argv0, so wrapping `cli.sh` itself would make `--help` say
+`cli.sh`. A new command needs nothing here, but a new external tool goes in `runtimeInputs`.
+
+`install.sh` has no Nix install path on purpose: `detect_nix` (lib/packages.sh) sets
+`package_manager=nix` and the messages print `nix_hint` instead of a command to run.
+
 ## Gotchas
 
 - To simulate an unreachable GitHub, run with `HTTPS_PROXY=http://127.0.0.1:9`. gh then fails with

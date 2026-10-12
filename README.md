@@ -36,7 +36,8 @@ The installer works on macOS and Linux and reports each step:
 2. **Requirements**: checks `gh` and `jq` (1.7 or later). For each missing or outdated one it shows
    the install command and asks before running it. It also offers `gh auth login` if you are not
    logged in. glow, gum and fzf are optional: the installer offers them through
-   Homebrew, and elsewhere prints where to get them (Linux distributions package only glow 2 so far).
+   Homebrew, and elsewhere prints where to get them (most Linux distributions package only glow 2
+   so far; nixpkgs has glow 3).
 3. **Commands**: links `github-scripts` and its short name `ghs` into `~/.local/bin`, pointing at the
    clone. If that directory is not on your `PATH`, it prints the line to add to your shell profile.
 
@@ -49,6 +50,37 @@ On Linux, package installs go through `sudo` unless you run as root. Some older 
 1.6 (Debian 12, Ubuntu 22.04); there, install jq 1.7 from [jqlang.org](https://jqlang.org/download/)
 and rerun the installer.
 
+### Nix
+
+The repository is a flake, so on NixOS, nix-darwin or any machine with Nix there is nothing to
+install or link: the package wraps `ghs` with `gh`, `jq`, `glow` 3, `gum` and `fzf` on its `PATH`,
+and ships the bash completion.
+
+```sh
+nix run github:flombois/github-scripts -- issues -R cli/cli   # try it once
+nix profile install github:flombois/github-scripts            # keep it
+```
+
+To declare it instead, add the flake as an input and the package to your configuration:
+
+```nix
+# flake.nix
+inputs.github-scripts.url = "github:flombois/github-scripts";
+
+# NixOS: configuration.nix          home-manager: home.nix
+environment.systemPackages = [ inputs.github-scripts.packages.${pkgs.system}.default ];
+home.packages = [ inputs.github-scripts.packages.${pkgs.system}.default ];
+```
+
+`overlays.default` is there too, if you would rather have `pkgs.github-scripts`. Completion is
+loaded for you with `programs.bash.completion.enable` (NixOS) or `programs.bash.enableCompletion`
+(home-manager); for zsh, add `eval "$(ghs completion zsh)"` as `programs.zsh.initContent`.
+
+Without flakes, or to run the scripts straight from a clone, the packages are
+`gh jq glow gum fzf less util-linux`; `install.sh` detects Nix and prints what to declare rather
+than installing anything. `nix develop` gives a shell with those plus Python with `pyte`, which
+renders fzf's screen when checking the browse.
+
 ## Update
 
 ```sh
@@ -57,7 +89,8 @@ git pull
 ```
 
 The commands are links to the clone, so pulling is enough. If you move the clone, run
-`./install.sh` again from its new place.
+`./install.sh` again from its new place. With Nix, update the flake input (or
+`nix profile upgrade github-scripts`) instead.
 
 ## Uninstall
 
@@ -65,6 +98,8 @@ The commands are links to the clone, so pulling is enough. If you move the clone
 cd github-scripts
 ./uninstall.sh            # add --prefix DIR if you installed with one
 ```
+
+With Nix, `nix profile remove github-scripts`, or drop the package from your configuration.
 
 This removes the two links and nothing else; delete the clone afterwards if you no longer need it.
 
@@ -244,3 +279,4 @@ repository's own secrets and variables are listed, not those of its environments
 - `lib/packages.sh` — platform detection, requirement checks and package installs for the installer
 - `lib/table.jq` — table rendering and frames shared by every command; a cell is a list of
   `{text, style, link}` segments
+- `flake.nix`, `nix/package.nix` — the Nix package, overlay and `nix develop` shell
