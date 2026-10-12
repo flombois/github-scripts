@@ -98,13 +98,16 @@ ghs issues 42 -c -R owner/repo
 ```
 
 Long issues open in `less` (or `$PAGER`); short ones print directly. With glow installed, the
-description and comments are rendered as Markdown (set `GLAMOUR_STYLE=light` on a light terminal).
-Piped output keeps the raw Markdown.
+description and comments are rendered as Markdown (set `GLAMOUR_STYLE=light` on a light terminal), and
+on a terminal 110 columns or wider the assignees, labels, type, milestone and parent move to a sidebar
+on the right, as on GitHub. Piped output keeps the raw Markdown.
 
 - `ghs --help` lists the commands.
 - `ghs <command> --help` (or `ghs help <command>`) lists the options of a command.
 
-Tables fit the terminal width (override with `COLUMNS=120`). Piped output has no colours.
+Every view fills the terminal width: the title column of a table stretches, and narrow terminals
+clip the longest columns first (override the width with `COLUMNS=120`). Piped output has no colours
+and no clipping.
 
 ## Layout
 

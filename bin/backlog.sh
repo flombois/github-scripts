@@ -94,7 +94,7 @@ def row($branch):
       {key: "number", header: "#", align: "right"},
       {key: "type", header: "TYPE"},
       {key: "title", header: "TITLE", flex: true},
-      {key: "labels", header: "LABELS"},
+      {key: "labels", header: "LABELS", max: 40},
       {key: "assignees", header: "ASSIGNEE"},
       {key: "progress", header: "PROGRESS"},
       {key: "updated", header: "UPDATED"}

@@ -16,9 +16,12 @@ Every script in `bin/` has the same shape; copy an existing one:
    handed to `render_table` with any extra `--arg`s.
 
 `issue.sh` is the one command without a table: after steps 1–2 its program prints its own lines
-in parts (`--arg part header|body|divider|comments|footer`), so the shell can pass the body and the
-comments to glow 3 (`render_markdown`) on a terminal, and `page` the whole issue through `less`.
-Without glow, or when piped, those parts stay raw Markdown. `backlog.sh 42` (`ghs issues 42`) hands
+in parts (`--arg part header|sidebar|body|subIssues|divider|comments|footer`), so the shell can pass
+the body and the comments to glow 3 (`render_markdown`) on a terminal, and `page` the whole issue
+through `less`. Without glow, or when piped, those parts stay raw Markdown. With glow and 110+
+columns, `--arg layout sidebar` moves the fields to a GitHub-style sidebar: the main parts render at
+the narrower main width, and `beside_program` pads each line to it (measuring past ANSI codes and
+wide characters) and appends a sidebar line. `backlog.sh 42` (`ghs issues 42`) hands
 over to it when the first argument is a number.
 
 A new `bin/<name>.sh` is a `ghs <name>` command with no change to `cli.sh`. Its line-2 comment is
@@ -31,11 +34,17 @@ Table rules, all enforced by `lib/table.jq`:
   join cells with `+`. A style is an ANSI SGR code from the named defs (`bold`, `dim`, `red`, …,
   `hexColor` for GitHub label hex, `namedColor` for issue-type enum colours).
 - Colour goes through `paint` only, which is a no-op off a terminal, so piped output stays plain.
-- One column per table is `flex: true` (it takes the leftover width); cap long columns with `max: N`.
-  Clipping is done by the table, so cells carry full text.
+- One column per table is `flex: true`; on a terminal it stretches to fill the width. `max: N` marks a
+  column that may be clipped: to N when room is short, down to 12 before the table overflows, and
+  not at all when there is room. Clipping is done by the table, so cells carry full text.
+- The footer wraps to the terminal width.
 - Footer counts use `tally` (drops zeros) and `plural`.
 
 ## Gotchas
+
+- `tput cols` inside `$(…)` answers 80 whatever the terminal, since its stdout is a pipe.
+  `terminal_width` asks `stty size </dev/tty` instead. In tests, set the width with `stty cols N`
+  inside `script` (or with `COLUMNS`).
 
 - glow writes terminal queries (colours, cursor) to stderr even with `-s`; their replies would land
   in `less`. `render_markdown` runs it with `TERM=dumb`, which stops them and keeps the colours.

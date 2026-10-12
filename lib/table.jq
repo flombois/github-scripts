@@ -30,6 +30,13 @@ def cellWidth: map(.text | length) | add // 0;
 def joinCells($separator): reduce .[] as $cell ([]; if . == [] then $cell else . + $separator + $cell end);
 def renderInline: map(.style as $style | .text | paint($style)) | join("");
 
+# Packs cells into as few lines as fit $width, joined by $separator.
+def wrapCells($width; $separator):
+  reduce .[] as $cell ([];
+    if . == [] then [$cell]
+    elif (.[-1] + $separator + $cell | cellWidth) <= $width then .[-1] += $separator + $cell
+    else . + [$cell] end);
+
 def clipCell($width):
   if cellWidth <= $width then .
   else
@@ -76,19 +83,33 @@ def progressBar($completed; $total):
     + (" \($completed)/\($total)" | cell(""));
 
 # Renders {title, subtitle, columns: [{key, header, align?, flex?, max?}], rows, footer, empty} as lines.
-# The single flex column absorbs the terminal width left over by the others; max caps a column.
+# On a terminal the single flex column stretches to fill the width. max caps a column only when
+# the room is short.
 def table:
   . as $table
   | $table.columns as $columns
   | $table.rows as $rows
-  | [$columns[] | .key as $key | (.max // infinite) as $max
-     | [[(.header | length), ($rows[] | .[$key] // [] | cellWidth)] | max, $max] | min] as $natural
-  | ([range(0; $columns | length) | select($columns[.].flex | not) | $natural[.]] | add // 0) as $fixedWidth
-  | (2 * ($columns | length) - 1 + $fixedWidth) as $usedWidth
-  | [range(0; $columns | length) as $index
-     | $natural[$index]
-     | if $columns[$index].flex then [([$terminalWidth - $usedWidth, .] | min), ([., 20] | min)] | max else . end
-    ] as $widths
+  | ($columns | length) as $count
+  | [$columns[] | .key as $key | [(.header | length), ($rows[] | .[$key] // [] | cellWidth)] | max] as $full
+  | [range(0; $count) | [$full[.], ($columns[.].max // infinite)] | min] as $capped
+  | [range(0; $count) | select($columns[.].flex)][0] as $flex
+  | [range(0; $count) | select(. != $flex)] as $fixed
+  | ($terminalWidth - (2 * $count - 1)) as $room
+  | ($room - ([$fixed[] | $capped[.]] | add // 0) - $full[$flex]) as $spare
+  | (reduce $fixed[] as $index ({widths: $capped, spare: $spare};
+       ([$full[$index] - .widths[$index], .spare] | min) as $extra
+       | if $extra > 0 then .widths[$index] += $extra | .spare -= $extra else . end)
+     | .widths) as $grown
+  | ([$full[$flex], 20] | min) as $flexMinimum
+  | (reduce ($fixed[] | select($columns[.].max)) as $index
+       ({widths: $grown, short: ($flexMinimum - $room + ([$fixed[] | $grown[.]] | add // 0))};
+       ([.short, .widths[$index] - 12] | min) as $cut
+       | if $cut > 0 then .widths[$index] -= $cut | .short -= $cut else . end)
+     | .widths) as $squeezed
+  | ($room - ([$fixed[] | $squeezed[.]] | add // 0)) as $flexRoom
+  | ($squeezed
+     | .[$flex] = ([if $isTerminal then $flexRoom else [$flexRoom, $full[$flex]] | min end, $flexMinimum]
+                   | max)) as $widths
   | (($widths | add) + 2 * (($widths | length) - 1)) as $tableWidth
   | def line($cells):
       " " + ([range(0; $columns | length) as $index
@@ -104,5 +125,6 @@ def table:
     (if $rows == [] then " " + ($table.empty | paint(dim))
      else $rows[] | . as $row | line([$columns[] | $row[.key] // []]) end),
     rule,
-    " " + ($table.footer | joinCells("  ·  " | cell(dim)) | renderInline),
+    ((if $isTerminal then $terminalWidth - 1 else infinite end) as $footerWidth
+     | ($table.footer | wrapCells($footerWidth; "  ·  " | cell(dim)))[] | " " + renderInline),
     "";

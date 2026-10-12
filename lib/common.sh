@@ -63,13 +63,20 @@ render_markdown() {
   local text
   text="$(cat)"
   [[ -n "$text" ]] || return 0
-  local width=$(($1 - 1 < 101 ? $1 - 1 : 101))
-  TERM=dumb glow -s "${GLAMOUR_STYLE:-dark}" -w "$width" - <<<"$text" \
+  TERM=dumb glow -s "${GLAMOUR_STYLE:-dark}" -w "$(($1 - 1))" - <<<"$text" \
     | LC_ALL=C sed -E -e 's/^ //' -e $'s/(\x1b\\[[0-9;]*m| )+$/\x1b[0m/'
 }
 
+# Asks the terminal itself: inside $(…), tput sees a pipe and answers 80.
 terminal_width() {
-  echo "${COLUMNS:-$(tput cols 2>/dev/null || echo 120)}"
+  local size
+  if [[ -n "${COLUMNS:-}" ]]; then
+    echo "$COLUMNS"
+  elif size="$(stty size </dev/tty 2>/dev/null)" && [[ "$size" =~ ^[0-9]+\ ([1-9][0-9]*)$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+  else
+    echo 80
+  fi
 }
 
 # Usage: render_with is_terminal width program [jq options…]

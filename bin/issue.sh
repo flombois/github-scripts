@@ -58,7 +58,7 @@ def typeCell:
 
 def statusLine:
   [stateCell,
-   typeCell,
+   (if $layout == "sidebar" then empty else typeCell end),
    ("@\(.author.login // "ghost")" | cell(magenta)) + (" opened \(.createdAt | ago)" | cell(dim)),
    (if .state == "OPEN" then "updated \(.updatedAt | ago)" else "closed \(.closedAt // .updatedAt | ago)" end
     | cell(dim)),
@@ -69,10 +69,9 @@ def field($label; $value):
   ($label | 12 - length) as $gap
   | ($label + (" " | times($gap)) | cell(dim)) + $value;
 
-def labelsCell:
-  if .labels == [] then "—" | cell(dim)
-  else [.labels[] | .color as $color | ("●" | cell($color | hexColor)) + (" \(.name)" | cell(""))]
-       | joinCells("  " | cell("")) end;
+def labelCells: [.labels[] | .color as $color | ("●" | cell($color | hexColor)) + (" \(.name)" | cell(""))];
+
+def labelsCell: labelCells | if . == [] then "—" | cell(dim) else joinCells("  " | cell("")) end;
 
 def assigneesCell:
   [.assignees[].login | "@" + .]
@@ -87,13 +86,31 @@ def fields:
   field("Labels"; labelsCell),
   field("Assignees"; assigneesCell),
   ((.milestone // empty) as $milestone | field("Milestone"; $milestone.title | cell(""))),
-  ((.parent // empty) as $parent | field("Parent"; $parent | issueRef)),
-  (if .subIssues.totalCount > 0 then
-     field("Sub-issues"; progressBar(.subIssuesSummary.completed; .subIssuesSummary.total)),
-     (.subIssues.nodes[] | field(""; subIssueLine)),
-     ((.subIssues.totalCount - (.subIssues.nodes | length)) as $more
-      | select($more > 0) | field(""; "… \($more) more" | cell(dim)))
-   else empty end);
+  ((.parent // empty) as $parent | field("Parent"; $parent | issueRef));
+
+def subIssueLines:
+  if .subIssues.totalCount == 0 then empty
+  else
+    (if $markdown then empty else "" end),
+    " " + (("Sub-issues  " | cell(bold)) + progressBar(.subIssuesSummary.completed; .subIssuesSummary.total)
+           | renderInline),
+    (.subIssues.nodes[] | "   " + (subIssueLine | clipCell($terminalWidth - 4) | renderInline)),
+    ((.subIssues.totalCount - (.subIssues.nodes | length)) as $more
+     | select($more > 0) | "   " + ("… \($more) more" | paint(dim)))
+  end;
+
+# The GitHub sidebar: one section per field, a placeholder when it is unset.
+def orNone($placeholder): if . == [] then [$placeholder | cell(dim)] else . end;
+
+def sidebarSection($title; $cells): [($title | paint(bold)), ($cells[] | clipCell($terminalWidth) | renderInline)];
+
+def sidebar:
+  [sidebarSection("Assignees"; [.assignees[].login | "@" + . | cell(magenta)] | orNone("No one assigned")),
+   sidebarSection("Labels"; labelCells | orNone("No labels")),
+   sidebarSection("Type"; [typeCell] | orNone("No type")),
+   sidebarSection("Milestone"; [.milestone // empty | .title | cell("")] | orNone("No milestone")),
+   sidebarSection("Parent"; [.parent // empty | issueRef] | orNone("No parent"))]
+  | (.[0][]), (.[1:][] | ("─" | times($terminalWidth) | paint(dim)), .[]);
 
 # Markdown without the HTML comments GitHub hides, Windows line ends or surrounding blank lines.
 def cleanMarkdown:
@@ -103,7 +120,7 @@ def textLines($indent): cleanMarkdown | split("\n")[] | $indent + . | sub(" +$";
 
 def hasText: . // "" | test("\\S");
 
-def rule: " " + ("─" | times([$terminalWidth - 2, 100] | min) | paint(dim));
+def rule: " " + ("─" | times(if $isTerminal then $terminalWidth - 2 else 100 end) | paint(dim));
 
 def hiddenReason: "(hidden: \(.minimizedReason | ascii_downcase))";
 
@@ -124,13 +141,17 @@ if $part == "header" then
   " " + (("#\(.number)" | cell(bold)) + ("  " | cell("")) + (.title | cell(bold)) | renderInline),
   " " + (statusLine | renderInline),
   "",
-  (fields | " " + renderInline),
+  (if $layout == "sidebar" then empty else fields | " " + renderInline end),
   rule
+elif $part == "sidebar" then
+  sidebar
 elif $part == "body" then
   if $markdown then
     if .body | hasText then .body | cleanMarkdown else "_No description provided._" end
   elif .body | hasText | not then " " + ("No description provided." | paint(dim))
   else .body | textLines(" ") end
+elif $part == "subIssues" then
+  subIssueLines
 elif $part == "divider" then
   rule,
   (if showsComments then "", " " + ("Comments" | paint(bold)) else empty end)
@@ -142,6 +163,39 @@ else
   " " + (.url | paint(dim)),
   ""
 end
+'
+
+# Puts the sidebar lines (--arg sidebar) beside the main column on stdin, padded to $terminalWidth.
+# A main line too wide to share its row keeps it alone. Wide (CJK, emoji) characters count twice.
+beside_program='
+def wideRanges:
+  [[4352,4447],[8986,8987],[9193,9196],[9200,9203],[9725,9726],[9748,9749],[9800,9811],[9855,9855],
+   [9875,9875],[9889,9889],[9898,9899],[9917,9918],[9924,9925],[9934,9934],[9940,9940],[9962,9962],
+   [9970,9971],[9973,9973],[9978,9978],[9981,9981],[9989,9989],[9994,9995],[10024,10024],[10060,10060],
+   [10062,10062],[10067,10069],[10071,10071],[10133,10135],[10160,10160],[10175,10175],[11035,11036],
+   [11088,11088],[11093,11093],[11904,12350],[12353,42191],[44032,55203],[63744,64255],[65072,65103],
+   [65280,65376],[65504,65510],[127744,128591],[128640,128767],[129280,129535],[129648,129791],
+   [131072,262141]];
+
+def charWidth:
+  . as $code
+  | if $code < 32 or ($code >= 768 and $code <= 879) or ($code >= 8203 and $code <= 8207)
+       or ($code >= 65024 and $code <= 65039) then 0
+    elif any(wideRanges[]; $code >= .[0] and $code <= .[1]) then 2
+    else 1 end;
+
+def visibleWidth:
+  gsub("\u001b\\[[0-9;]*m"; "") | gsub("\u001b\\]8;[^\u0007]*\u0007"; "") | explode | map(charWidth) | add // 0;
+
+($sidebar | split("\n")) as $side
+| rtrimstr("\n") | split("\n")
+| reduce .[] as $line ({lines: [], next: 0};
+    if .next >= ($side | length) then .lines += [$line]
+    else ($line | visibleWidth) as $used
+      | if $used > $terminalWidth then .lines += [$line]
+        else .lines += [$line + (" " | times($terminalWidth - $used + 3)) + $side[.next]] | .next += 1 end
+    end)
+| .lines[], ($side[.next:][] | (" " | times($terminalWidth + 3)) + .)
 '
 
 issue="$(gh issue view "$number" -R "$repo" --json "$fields")" \
@@ -157,25 +211,44 @@ markdown=false
 if [[ "$is_terminal" == true ]] && has_glow; then
   markdown=true
 fi
+# Like GitHub, the fields move to a sidebar when there is room. Raw Markdown can't be fitted into
+# a column, so that needs glow.
+layout=stacked
+if [[ "$markdown" == true && "$width" -ge 110 ]]; then
+  layout=sidebar
+fi
+sidebar_width=$((width / 4 < 28 ? 28 : width / 4 > 40 ? 40 : width / 4))
+main_width=$((width - sidebar_width - 3))
 
+# Usage: print_part part [width]
 print_part() {
-  render_with "$is_terminal" "$width" "$program" --arg part "$1" \
+  render_with "$is_terminal" "${2:-$width}" "$program" --arg part "$1" --arg layout "$layout" \
     --argjson showComments "$show_comments" --argjson markdown "$markdown" <<<"$issue"
 }
 
 print_markdown_part() {
   if [[ "$markdown" == true ]]; then
-    print_part "$1" | render_markdown "$width"
+    print_part "$1" "$2" | render_markdown "$2"
   else
-    print_part "$1"
+    print_part "$1" "$2"
   fi
+}
+
+print_main() {
+  print_markdown_part body "$1"
+  print_part subIssues "$1"
+  print_part divider "$1"
+  print_markdown_part comments "$1"
 }
 
 print_issue() {
   print_part header
-  print_markdown_part body
-  print_part divider
-  print_markdown_part comments
+  if [[ "$layout" == sidebar ]]; then
+    print_main "$main_width" \
+      | render_with true "$main_width" "$beside_program" -R -s --arg sidebar "$(print_part sidebar "$sidebar_width")"
+  else
+    print_main "$width"
+  fi
   print_part footer
 }
 
