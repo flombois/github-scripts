@@ -231,6 +231,39 @@ browse_help() {
   esac
 }
 
+# Usage: watch_loop seconds fetch draw active
+# Redraws every few seconds: fetch (in this shell, uncached) sets the data, draw prints the screen,
+# and the loop stops once active says nothing is left running. ctrl-c stops it too.
+watch_loop() {
+  local seconds="$1" fetch="$2" draw="$3" active="$4" screen
+  [[ -t 1 ]] || fail "--watch needs a terminal"
+  refresh=true
+  trap 'printf "\033[?25h\n"; exit 130' INT
+  printf '\033[?25l'
+  while :; do
+    "$fetch"
+    screen="$(GHS_FORCE_TERMINAL=1 "$draw")"
+    printf '\033[H\033[2J%s\n' "$screen"
+    if ! "$active"; then
+      printf ' \033[32m✓\033[0m Nothing left running, so the watch stopped.\n'
+      break
+    fi
+    printf ' \033[2mwatching every %ss · updated %s · ctrl-c to stop\033[0m\n' "$seconds" "$(date +%H:%M:%S)"
+    sleep "$seconds"
+  done
+  printf '\033[?25h'
+}
+
+# Usage: watch_option "$@" — reads --watch [seconds] (default 5) into `watch`, setting `taken`.
+watch_option() {
+  watch=5
+  taken=1
+  if [[ "${2:-}" =~ ^[1-9][0-9]*$ ]]; then
+    watch="$2"
+    taken=2
+  fi
+}
+
 # Asks the terminal itself: inside $(…), tput sees a pipe and answers 80.
 terminal_width() {
   local size

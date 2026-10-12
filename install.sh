@@ -85,3 +85,8 @@ check_path
 
 heading "Done"
 echo "  Run 'ghs --help' to see the commands."
+shell_name="$(basename "${SHELL:-bash}")"
+if [[ "$shell_name" == zsh || "$shell_name" == bash ]]; then
+  echo "  For tab completion, add this line to ~/.${shell_name}rc:"
+  echo "      eval \"\$(ghs completion $shell_name)\""
+fi

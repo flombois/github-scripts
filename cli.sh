@@ -45,12 +45,29 @@ if [[ $# -eq 0 ]]; then
   usage >&2
   exit 1
 fi
+# For the shell completion (bin/completion.sh): the commands and aliases, and a command's options
+# as its --help lists them.
+list_commands() {
+  local script pair
+  for script in "$ROOT_DIR"/bin/*.sh; do basename "$script" .sh; done
+  for pair in "${ALIASES[@]}"; do echo "${pair%% *}"; done
+}
+
+list_options() {
+  local script
+  script="$ROOT_DIR/bin/$(resolve_alias "$1").sh"
+  [[ -x "$script" ]] || return 0
+  "$script" --help 2>/dev/null | grep -oE -- '(^|[ ,])--?[a-zA-Z][a-zA-Z-]*' | tr -d ' ,' | sort -u
+}
+
 case "$1" in
   -h | --help) usage; exit 0 ;;
   help)
     if [[ $# -lt 2 ]]; then usage; exit 0; fi
     set -- "$2" --help
     ;;
+  __commands) list_commands; exit 0 ;;
+  __options) list_options "${2:-}"; exit 0 ;;
 esac
 
 command="$(resolve_alias "$1")"

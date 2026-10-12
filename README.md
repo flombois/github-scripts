@@ -84,6 +84,7 @@ ghs <command> [options]
 | `inbox`         | `notifications` | Your unread notifications across repositories, with type and reason |
 | `releases`      | —        | Releases with latest / pre-release / draft status, assets and downloads |
 | `repo`          | —        | Overview: stats, recent merges and commits, CI health per workflow, latest release, top contributors |
+| `completion`    | —        | Prints the tab completion script for bash or zsh                        |
 
 Every command reads the repository of the current directory, or the one given with `-R`:
 
@@ -148,6 +149,16 @@ ones, `-p` for threads you take part in), so it needs no repository.
 ```sh
 ghs issues -i
 ghs pr -s all -i
+```
+
+To follow CI, `--watch` redraws every 5 seconds (or `--watch 10`) and stops once nothing is queued or
+running: `ghs runs --watch` for the runs table, `ghs pr 42 --watch` for a pull request's checks.
+
+For tab completion of commands, options, states, formats, workflow names, branches and repositories,
+add this line to `~/.zshrc` (or `bash` to `~/.bashrc`):
+
+```sh
+eval "$(ghs completion zsh)"
 ```
 
 - `ghs --help` lists the commands.

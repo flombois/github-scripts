@@ -5,7 +5,7 @@ source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../lib/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: pipeline-runs.sh [-R owner/repo] [-b branch] [-w workflow] [-L limit] [-i] [--format f] [--refresh]
+Usage: pipeline-runs.sh [-R owner/repo] [-b branch] [-w workflow] [-L limit] [-i] [--watch [s]] [--format f]
 
 Prints the recent GitHub Actions runs of a repository as a table.
 
@@ -16,6 +16,8 @@ Options:
   -w, --workflow name     Only runs of this workflow (name or file name).
   -L, --limit count       Most recent runs to show (default 20).
   -i, --interactive       Browse the runs in fzf, with a preview pane.
+      --watch [seconds]   Redraw every few seconds (default 5) until no run is
+                          queued or in progress.
       --format format     table (default), json or csv.
       --refresh           Fetch again instead of using the 5-minute cache.
   -h, --help              Show this help.
@@ -27,6 +29,7 @@ repo=''
 branch=''
 workflow=''
 limit=20
+watch=''
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == --*=* ]]; then set -- "${1%%=*}" "${1#*=}" "${@:2}"; fi
   case "$1" in
@@ -34,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     -b | --branch) needs_value "$1" $#; branch="$2"; shift 2 ;;
     -w | --workflow) needs_value "$1" $#; workflow="$2"; shift 2 ;;
     -L | --limit) needs_value "$1" $#; limit="$2"; shift 2 ;;
+    --watch) watch_option "$@"; shift "$taken" ;;
     -h | --help) usage; exit 0 ;;
     *)
       shared_option "$@"
@@ -44,6 +48,9 @@ while [[ $# -gt 0 ]]; do
 done
 require_count --limit "$limit"
 check_shared_options
+if [[ -n "$watch" && ( "$interactive" == true || "$format" != table ) ]]; then
+  fail "--watch can't be combined with -i or --format"
+fi
 repo="$(resolve_repo "$repo")"
 
 program='
@@ -120,8 +127,24 @@ filters=()
 if [[ -n "$branch" ]]; then filters+=(--branch "$branch"); fi
 if [[ -n "$workflow" ]]; then filters+=(--workflow "$workflow"); fi
 
-runs="$(cached_gh "Loading the workflow runs of ${repo}…" run list -R "$repo" --limit "$limit" ${filters[@]+"${filters[@]}"} --json \
-  databaseId,status,conclusion,name,workflowName,displayTitle,headBranch,event,createdAt,startedAt,updatedAt,attempt)" \
-  || fail "could not read the workflow runs of $repo"
+fetch_runs() {
+  runs="$(cached_gh "Loading the workflow runs of ${repo}…" run list -R "$repo" --limit "$limit" \
+    ${filters[@]+"${filters[@]}"} --json \
+    databaseId,status,conclusion,name,workflowName,displayTitle,headBranch,event,createdAt,startedAt,updatedAt,attempt)" \
+    || fail "could not read the workflow runs of $repo"
+}
 
-show_table run "$program" --arg repo "$repo" --arg branch "$branch" --arg workflow "$workflow" <<<"$runs"
+draw_runs() {
+  show_table run "$program" --arg repo "$repo" --arg branch "$branch" --arg workflow "$workflow" <<<"$runs"
+}
+
+runs_active() {
+  [[ "$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")" -gt 0 ]]
+}
+
+if [[ -n "$watch" ]]; then
+  watch_loop "$watch" fetch_runs draw_runs runs_active
+else
+  fetch_runs
+  draw_runs
+fi

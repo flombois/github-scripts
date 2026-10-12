@@ -88,11 +88,17 @@ Table rules, all enforced by `lib/table.jq`:
   `terminal_width` asks `stty size </dev/tty` instead. In tests, set the width with `stty cols N`
   inside `script` (or with `COLUMNS`).
 
+- `--watch` goes through `watch_loop seconds fetch draw active` (common.sh). It refetches with the
+  cache off, redraws, and stops when `active` fails; `draw` runs with `GHS_FORCE_TERMINAL=1`.
+- `bin/completion.sh` prints a bash completion (zsh loads it through bashcompinit). It calls the
+  hidden `ghs __commands` and `ghs __options <command>`, which parse each command's `--help`, so a
+  new option completes as soon as it is in the usage text.
 - `GHS_FORCE_TERMINAL=1` makes `on_terminal` true and stops `page` paging. fzf previews need it,
   since their stdout is a pipe. Previews of PRs and runs use gh's own `GH_FORCE_TTY` instead.
 - In bash 3.2, `"$repo…"` reads the `…` bytes as part of the name; write `"${repo}…"`.
 - To test browse actions, put a recording `gh` stub first on the `PATH` instead of acting on a real
-  repository.
+  repository. Set `XDG_CACHE_HOME` to a scratch directory too, or the stub's answers get cached
+  under the real repository's key for 5 minutes.
 - fzf can't be scripted under `script`. To see its screen, run it in a pty and render the output
   with pyte (a Python VT emulator). To check a preview, run its command by hand with
   `GHS_FORCE_TERMINAL=1 COLUMNS=60`.

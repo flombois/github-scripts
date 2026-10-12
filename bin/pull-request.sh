@@ -6,7 +6,7 @@ source "$LIB_DIR/detail.sh"
 
 usage() {
   cat <<'EOF'
-Usage: pull-request.sh <number> [-c] [-R owner/repo] [--refresh]
+Usage: pull-request.sh <number> [-c] [-R owner/repo] [--watch [s]] [--refresh]
 
 Prints one pull request of a GitHub repository: its state, branches,
 reviewers, merge status, checks and changed files, then its description.
@@ -16,6 +16,8 @@ Options:
   -c, --comments          Also print the comments and reviews.
   -R, --repo owner/repo   Repository to read; also accepts a GitHub URL.
                           Defaults to the repository of the current directory.
+      --watch [seconds]   Show the checks and redraw them every few seconds
+                          (default 5) until none is pending.
       --refresh           Fetch again instead of using the 5-minute cache.
   -h, --help              Show this help.
 EOF
@@ -24,12 +26,14 @@ EOF
 number=''
 show_comments=false
 repo=''
+watch=''
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == --*=* ]]; then set -- "${1%%=*}" "${1#*=}" "${@:2}"; fi
   case "$1" in
     -c | --comments) show_comments=true; shift ;;
     -R | --repo) needs_value "$1" $#; repo="$2"; shift 2 ;;
     --refresh) refresh=true; shift ;;
+    --watch) watch_option "$@"; shift "$taken" ;;
     -h | --help) usage; exit 0 ;;
     [0-9]* | '#'[0-9]*)
       [[ -z "$number" ]] || fail "one pull request at a time, got #$number and $1"
@@ -214,6 +218,8 @@ elif $part == "bodyTitle" then
   cardTitle("opened")
 elif $part == "description" then
   cardBody
+elif $part == "pendingCount" then
+  [checks[] | select(. == "pending")] | length
 elif $part == "entryCount" then
   timeline | length
 elif $part == "entryTitle" then
@@ -247,9 +253,29 @@ else
 end
 '
 
-item="$(cached_gh "Loading pull request #$number of ${repo}…" pr view "$number" -R "$repo" --json "$fields")" \
-  || fail "could not read pull request #$number of $repo"
+fetch_pull_request() {
+  item="$(cached_gh "Loading pull request #$number of ${repo}…" pr view "$number" -R "$repo" --json "$fields")" \
+    || fail "could not read pull request #$number of $repo"
+}
 
+# The --watch screen: the header and the checks.
+draw_checks() {
+  detail_layout
+  print_part header
+  print_part checks
+}
+
+checks_pending() {
+  [[ "$(print_part pendingCount)" -gt 0 ]]
+}
+
+if [[ -n "$watch" ]]; then
+  detail_layout
+  watch_loop "$watch" fetch_pull_request draw_checks checks_pending
+  exit 0
+fi
+
+fetch_pull_request
 detail_layout
 
 print_main() {
