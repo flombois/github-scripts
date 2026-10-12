@@ -16,16 +16,19 @@ Every script in `bin/` has the same shape; copy an existing one:
    for 5 minutes in `~/.cache/ghs`. Its JSON is captured into a variable, `|| fail "could not
    read …"`, so a `gh` error stops the script before jq runs.
 3. A jq `program` that builds `{title, subtitle, columns, rows, footer, empty}` and ends in `| table`,
-   handed to `show_table <issue|pr|run> "$program" --arg …`. That prints the table, the
-   `--format json|csv` export, or the fzf browse.
-   - Each row carries `_key: [kind, repo, id]`. In the fzf list these are hidden tab-separated
-     fields, which `lib/browse.sh <action> kind repo id extra` uses for the preview, Enter and
-     ctrl-o.
-   - `notifications.sh` rows name their own kind: `pr`, `issue`, or `link` (the id is a URL, opened in the
-     browser), with the notification thread id as the extra field.
+   handed to `show_table <kind> "$program" --arg …`. That prints the table, the
+   `--format json|csv` export, or the fzf browse; the kind picks the browse's title, keys and help
+   (`issue`, `pr`, `run`, `notification`, `release`, `setting`, `ruleset`, `secret`, `label`).
+   - Each row carries `_key: [kind, repo, id, extra]` (`extra` optional). In the fzf list these are
+     hidden tab-separated fields, which `lib/browse.sh <action> kind repo id extra` uses for the
+     preview, Enter and ctrl-o.
+   - A row's kind may differ from the table's: `notifications.sh` rows are `pr`, `issue`, or `link`
+     (the id is a URL, opened in the browser), with the notification thread id as the extra field;
+     `rules.sh` rows are `ruleset` or `branch-rule`, and `secrets.sh` rows `secret` or `variable`.
    - The alt-key actions are `kind:action` cases in `browse.sh`, bound in `browse()`
-     (`key_actions`). Changes go through `act` (clear the screen, confirm with gum or y/N on
-     `/dev/tty`, run, pause). Commands that prompt themselves go through `interactive`.
+     (`key_actions`). Changes go through `act` in `lib/prompt.sh` (clear the screen, confirm with
+     gum or y/N on `/dev/tty`, run, pause). Commands that prompt themselves go through
+     `interactive`.
 
 `issue.sh` and `pull-request.sh` are the detail views, with no table. `issues.sh 42` and
 `pull-requests.sh 42` hand over to them when the first argument is a number. Their shared pieces live
@@ -60,6 +63,9 @@ pass the Markdown to glow 3 (`render_markdown`) and `page` the whole view throug
 (`rules`, `secrets` for both secrets and variables, `labels`), each a table script of the usual shape.
 `cli.sh` only lists `bin/*.sh`, so the subcommands don't show as commands.
 
+- **Routing:** `settings.sh` hands `rules` and `labels` to their script, and `secrets` and
+  `variables` to `secrets.sh secret|variable`; that first argument says what `set` and `delete` act
+  on. `ghs __options settings <sub>` reads the subcommand's `--help` for the completion.
 - **Verbs:** each takes positional verbs after its options: public ones (`set`, `delete`, `create`,
   `edit`, `show`) and hidden ones for the fzf browse (`change`, `new`), which ask on `/dev/tty`
   through `lib/prompt.sh` (`confirm`, `ask`, `ask_hidden`, `choose`, `act`, `pause`).
@@ -158,6 +164,12 @@ render_table "$program" --arg repo fixture/runs --arg branch "" --arg workflow "
 
 Also check the error paths still read cleanly: an unknown option, a bad `-R`, and running outside a
 git repository.
+
+Never test `ghs settings` writes on a real repository: run `set`, `delete`, `create` and `edit`
+against the recording `gh` stub (see Gotchas) and read its log. Changing general settings and
+rulesets needs admin access; secrets, variables and labels need write access. cli/cli is
+read-only for us, so it shows the refusals; classic branch protection shows to admins only, so check
+it with a fixture the stub serves.
 
 ## Version control
 

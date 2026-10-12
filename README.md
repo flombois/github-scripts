@@ -7,6 +7,8 @@ ghs issues                 # open issues, sub-issues nested under their parent
 ghs issues 42 -c           # issue #42 with its sub-issues, description and comments
 ghs pr -R cli/cli          # pull requests with review, checks and size
 ghs actions -b main -w CI  # recent GitHub Actions runs with outcome and duration
+ghs info                   # repository overview: stats, activity, CI health, contributors
+ghs settings -i            # browse the repository's settings and change them
 ```
 
 ## Requirements
@@ -131,11 +133,11 @@ description and comments are rendered as Markdown (set `GLAMOUR_STYLE=light` on 
 on a terminal 110 columns or wider the assignees, labels, type, milestone and parent move to a sidebar
 on the right, as on GitHub. Piped output keeps the raw Markdown.
 
-To browse instead, add `-i` to `issues`, `pr`, `actions`, `notifications` or `releases` (needs fzf). Type to filter the list; the
-issue, pull request or run under the cursor shows in a preview pane (beside the list from 160
-columns, below it otherwise). Enter opens it in full, ctrl-o opens it in the browser, ctrl-r reloads
-the list, Esc quits. Alt keys act on the item, then reload the list; changes ask for confirmation
-first:
+To browse instead, add `-i` to `issues`, `pr`, `actions`, `notifications`, `releases` or `settings`
+and its subcommands (needs fzf). Type to filter the list; the item under the cursor shows in a
+preview pane (beside the list from 160 columns, below it otherwise). Enter opens it in full, ctrl-o
+opens it in the browser, ctrl-r reloads the list, Esc quits. Alt keys act on the item, then reload
+the list; changes ask for confirmation first:
 
 | Browsing | Keys |
 |----------|------|
@@ -143,6 +145,7 @@ first:
 | pr       | alt-k check out (in a clone of the repository) · alt-a approve · alt-m merge (gh asks how) · alt-c comment |
 | actions  | alt-r re-run failed jobs · alt-l failed logs · alt-w watch |
 | notifications | alt-d mark as read (Enter shows a pull request or issue; other threads open in the browser) |
+| settings | Enter changes a setting; the subcommands' keys are under [Settings](#settings) |
 
 `ghs notifications` (or `ghs inbox`) reads your notifications from every repository (`-R` for one,
 `-a` to include read ones, `-p` for threads you take part in), so it needs no repository.
@@ -207,18 +210,25 @@ ghs settings labels edit triage -n needs-triage
 ```
 
 Leave the value out for a secret: it is then read from standard input or a hidden prompt, so it
-stays out of your shell history, and ghs hands it to gh through standard input. Deleting a secret, variable or label asks first, or takes `--yes` in scripts. Rulesets inherited from
-an organisation, and classic branch protection, are shown but change on github.com.
+stays out of your shell history, and ghs hands it to gh through standard input. Deleting a secret,
+variable or label asks first, or takes `--yes` in scripts.
+
+Changing settings and rulesets needs admin access; secrets, variables and labels need write access.
+Rulesets inherited from an organisation, and classic branch protection (listed to admins only), are
+shown but change on github.com. `evaluate` mode is for GitHub Enterprise organisations. Only the
+repository's own secrets and variables are listed, not those of its environments or organisation.
 
 ## Layout
 
 - `cli.sh` — the `ghs` entry point: routes `ghs <command>` to `bin/<command>.sh`, and holds the aliases
 - `install.sh`, `uninstall.sh` — add and remove the `github-scripts` and `ghs` links
-- `bin/` — one script per command: options, the `gh` query, and the columns of its table (`issue.sh`
-  prints one issue instead of a table); `bin/settings/` holds the `ghs settings` subcommands
+- `bin/` — one script per command: options, the `gh` query, and the columns of its table
+  (`issue.sh`, `pull-request.sh` and `info.sh` print a detail view instead); `bin/settings/` holds
+  the `ghs settings` subcommands
 - `lib/common.sh` — option helpers, repository detection, the `jq` call, paging, glow, the gum
   spinner and the fzf browse
 - `lib/browse.sh`, `lib/prompt.sh` — the fzf browse's previews and actions, and the questions they ask
+- `lib/detail.sh`, `lib/detail.jq` — the layout, cards, sidebar and header box of the detail views
 - `lib/install.sh` — link names and output helpers shared by the installer and uninstaller
 - `lib/packages.sh` — platform detection, requirement checks and package installs for the installer
 - `lib/table.jq` — table rendering and frames shared by every command; a cell is a list of
