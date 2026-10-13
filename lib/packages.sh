@@ -17,7 +17,7 @@ detect_macos() {
   if command -v brew >/dev/null; then
     package_manager=brew
     ok "package manager: Homebrew ($(command -v brew))"
-  else
+  elif ! detect_nix; then
     note "Homebrew not found; missing packages can't be installed for you (see https://brew.sh)"
   fi
 }
@@ -36,7 +36,17 @@ detect_linux() {
       return
     fi
   done
+  if detect_nix; then return; fi
   note "no supported package manager found; missing packages can't be installed for you"
+}
+
+# Nix packages are declared, not installed by a script, so there is nothing for us to run: say
+# where they go instead. Covers NixOS, nix-darwin and a plain Nix install on any distribution.
+detect_nix() {
+  command -v nix >/dev/null || return 1
+  package_manager=nix
+  ok "package manager: nix ($(command -v nix))"
+  note "Nix packages are declared, not installed by this script; see the Nix section of the README"
 }
 
 # Checks that $1 is installed and at least version $2 (empty for any); offers to install it.
@@ -81,6 +91,10 @@ offer_tool() {
   else
     note "$tool $version is installed, but $minimum or later is needed (optional, $purpose)"
   fi
+  if [[ "$package_manager" == nix ]]; then
+    echo "    $(nix_hint "$tool")"
+    return
+  fi
   if [[ "$package_manager" != brew ]]; then
     echo "    Install $tool $minimum or later from $url"
     return
@@ -124,6 +138,9 @@ is_recent_enough() {
 install_tool() {
   local tool="$1"
   local url="$2"
+  if [[ "$package_manager" == nix ]]; then
+    fail "$tool is required; $(nix_hint "$tool")"
+  fi
   local command
   command="$(install_command "$tool")" || fail "$tool is required; install it from $url"
   if ! confirm "    Install it with '$command'?"; then
@@ -154,6 +171,13 @@ install_command() {
     apk) echo "${sudo}apk add --upgrade $package" ;;
     *) return 1 ;;
   esac
+}
+
+# Prints the two ways to get tool $1 with Nix: declared, or for one shell.
+nix_hint() {
+  local package
+  package="$(package_name "$1")"
+  echo "add pkgs.$package to your configuration, or run 'nix shell nixpkgs#$package' for one shell"
 }
 
 # Prints the package that provides tool $1 for the detected package manager.
