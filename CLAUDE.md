@@ -23,7 +23,7 @@ Every script in `bin/` has the same shape; copy an existing one:
 3. A jq `program` that builds `{title, subtitle, columns, rows, footer, empty}` and ends in `| table`,
    handed to `show_table <kind> "$program" --arg …`. That prints the table, the
    `--format json|csv` export, or the fzf browse; the kind picks the browse's title, keys and help
-   (`issue`, `pr`, `run`, `notification`, `release`, `setting`, `ruleset`, `secret`, `label`).
+   (`issue`, `pr`, `run`, `notification`, `release`, `setting`, `ruleset`, `secret`, `label`, `alert`).
    - Each row carries `_key: [kind, repo, id, extra]` (`extra` optional). In the fzf list these are
      hidden tab-separated fields, which `lib/browse.sh <action> kind repo id extra` uses for the
      preview, Enter and ctrl-o.

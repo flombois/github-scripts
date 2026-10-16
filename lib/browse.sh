@@ -24,6 +24,7 @@ preview() {
     ruleset | branch-rule) GHS_FORCE_TERMINAL=1 COLUMNS="$FZF_PREVIEW_COLUMNS" "$SETTINGS_DIR/rules.sh" show "$id" -R "$repo" ;;
     secret | variable) "$SETTINGS_DIR/secrets.sh" "$kind" show "$id" -R "$repo" ;;
     label) COLUMNS="$FZF_PREVIEW_COLUMNS" "$SETTINGS_DIR/labels.sh" show "$id" -R "$repo" ;;
+    alert) COLUMNS="$FZF_PREVIEW_COLUMNS" GHS_FORCE_TERMINAL=1 "$BIN_DIR/security.sh" show "$id" -R "$repo" ;;
   esac
 }
 
@@ -36,6 +37,7 @@ view() {
     release) GH_FORCE_TTY=100% gh release view "$id" -R "$repo" | less -RF ;;
     ruleset | branch-rule) "$SETTINGS_DIR/rules.sh" show "$id" -R "$repo" ;;
     label) "$BIN_DIR/issues.sh" -l "$id" -R "$repo" ;;
+    alert) open_url "$extra" ;;
   esac
 }
 
@@ -52,6 +54,7 @@ open_in_browser() {
     secret) open_url "https://github.com/$repo/settings/secrets/actions" ;;
     variable) open_url "https://github.com/$repo/settings/variables/actions" ;;
     label) open_url "$extra" ;;
+    alert) open_url "$extra" ;;
   esac
 }
 
@@ -107,6 +110,8 @@ case "$kind:$action" in
   label:new) "$SETTINGS_DIR/labels.sh" new -R "$repo" ;;
   label:change) "$SETTINGS_DIR/labels.sh" change "$id" -R "$repo" ;;
   label:delete) act "Delete the label \"$id\" from $repo and its issues" "$SETTINGS_DIR/labels.sh" delete "$id" -R "$repo" --yes ;;
+  alert:dismiss) clear_screen; "$BIN_DIR/security.sh" dismiss "$id" -R "$repo" || pause ;;
+  alert:reopen) act "Reopen $id of $repo" "$BIN_DIR/security.sh" reopen "$id" -R "$repo" ;;
   *)
     clear_screen
     echo "There is no $action action for this $kind." >/dev/tty

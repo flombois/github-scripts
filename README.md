@@ -122,6 +122,7 @@ ghs <command> [options]
 | `releases`      | —       | Releases with latest / pre-release / draft status, assets and downloads |
 | `info`          | —       | Overview: stats, recent merges and commits, CI health per workflow, latest release, top contributors |
 | `settings`      | —       | Settings, rulesets, secrets and variables, and labels; view and change them |
+| `security`      | —       | Dependabot, code scanning and secret scanning alerts; dismiss or reopen them |
 | `completion`    | —       | Prints the tab completion script for bash or zsh                        |
 
 Every command reads the repository of the current directory, or the one given with `-R`:
@@ -179,7 +180,7 @@ description and comments are rendered as Markdown (set `GLAMOUR_STYLE=light` on 
 on a terminal 110 columns or wider the assignees, labels, type, milestone and parent move to a sidebar
 on the right, as on GitHub. Piped output keeps the raw Markdown.
 
-To browse instead, add `-i` to `issues`, `pr`, `actions`, `notifications`, `releases` or `settings`
+To browse instead, add `-i` to `issues`, `pr`, `actions`, `notifications`, `releases`, `security` or `settings`
 and its subcommands (needs fzf). Type to filter the list; the item under the cursor shows in a
 preview pane (beside the list from 160 columns, below it otherwise). Enter opens it in full, ctrl-o
 opens it in the browser, ctrl-r reloads the list, Esc quits. Alt keys act on the item, then reload
@@ -191,7 +192,12 @@ the list; changes ask for confirmation first:
 | pr       | alt-k check out (in a clone of the repository) · alt-a approve · alt-m merge (gh asks how) · alt-c comment |
 | actions  | alt-r re-run failed jobs · alt-l failed logs · alt-w watch |
 | notifications | alt-d mark as read (Enter shows a pull request or issue; other threads open in the browser) |
+| security | Enter or ctrl-o opens the alert on GitHub · alt-d dismiss (asks why) · alt-r reopen |
 | settings | Enter changes a setting; the subcommands' keys are under [Settings](#settings) |
+
+`ghs security` lists the open Dependabot, code scanning and secret scanning alerts, most severe
+first (`-s closed` or `all`, `-k dependabot|code|secret`, `--severity high` for high and critical).
+A source that is turned off or that you may not read shows as a note under the table.
 
 `ghs notifications` (or `ghs inbox`) reads your notifications from every repository (`-R` for one,
 `-a` to include read ones, `-p` for threads you take part in), so it needs no repository.
