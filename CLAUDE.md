@@ -81,6 +81,11 @@ pass the Markdown to glow 3 (`render_markdown`) and `page` the whole view throug
   fetches again.
 - **Browse:** a kind's `key_actions` can rebind `enter` (settings and secrets change the value). Actions
   named `new…` get the kind and repository instead of the row's keys, so they work on an empty list.
+  Settings also bind left/right to `transform` (`browse.sh previous|next` → `settings.sh step`): it
+  writes, then prints `change-footer~…~+reload[$GHS_RELOAD]`, with `--track --id-nth 3` keeping the
+  cursor. The footer must come first: fzf drops actions queued after a tracked reload. Visibility
+  instead returns an `execute` that confirms. Text settings edit in `edit_box` (prompt.sh), a
+  centred fzf with `--disabled --print-query`.
 - **Fetching:** GraphQL can't read where an inherited ruleset comes from, so `rules.sh` merges in the
   REST ruleset list.
 

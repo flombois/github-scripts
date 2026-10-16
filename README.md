@@ -191,7 +191,7 @@ the list; changes ask for confirmation first:
 | pr       | alt-k check out (in a clone of the repository) · alt-a approve · alt-m merge (gh asks how) · alt-c comment |
 | actions  | alt-r re-run failed jobs · alt-l failed logs · alt-w watch |
 | notifications | alt-d mark as read (Enter shows a pull request or issue; other threads open in the browser) |
-| settings | Enter changes a setting; the subcommands' keys are under [Settings](#settings) |
+| settings | ← → flip a switch or step through a choice in place; Enter changes a setting (a text one in an edit box: Enter saves, Esc cancels); the subcommands' keys are under [Settings](#settings) |
 
 `ghs notifications` (or `ghs inbox`) reads your notifications from every repository (`-R` for one,
 `-a` to include read ones, `-p` for threads you take part in), so it needs no repository.
@@ -225,8 +225,10 @@ frames, spinner or clipping.
 ## Settings
 
 `ghs settings` lists a repository's general, feature and pull request settings. Change one with
-`set`, or with `-i`, where Enter on a setting asks for its new value. Changes need admin access,
-and each one is confirmed in `-i`:
+`set`, or with `-i`: the left and right arrows flip a switch or step to the previous or next choice
+right in the list, and Enter asks for a new value (text settings open an edit box holding the current
+value). Changes need admin access; in `-i`, the visibility and Enter's switch and choice changes are
+confirmed first:
 
 ```sh
 ghs settings

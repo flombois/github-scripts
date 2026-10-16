@@ -17,7 +17,8 @@ Usage: settings.sh [-R owner/repo] [-i] [--format f] [--refresh] [--offline]
        settings.sh rules|secrets|variables|labels [options]
 
 Prints the settings of a GitHub repository: general, features and pull
-requests. set changes one; with -i, Enter changes the one under the cursor.
+requests. set changes one; with -i, the left and right arrows flip a switch
+or step through a choice, and Enter changes the setting under the cursor.
 Changing a setting needs admin access to the repository.
 
 Settings and their values:
@@ -41,7 +42,7 @@ The other settings have their own commands; see their --help:
 Options:
   -R, --repo owner/repo   Repository to read; also accepts a GitHub URL.
                           Defaults to the repository of the current directory.
-  -i, --interactive       Browse the settings in fzf; Enter changes one.
+  -i, --interactive       Browse the settings in fzf; arrows step, Enter changes.
       --format format     table (default), json or csv.
       --refresh           Fetch again instead of using the 5-minute cache.
       --offline           Use the cache only, even past 5 minutes; never
@@ -146,6 +147,8 @@ case "$verb" in
   '') ;;
   set) [[ -n "$key" && "$has_value" == true ]] || fail "set needs a setting and a value, such as: set wiki off" ;;
   change | show) [[ -n "$key" ]] || fail "$verb needs a setting" ;;
+  # The fzf browse's left and right arrows.
+  step) [[ -n "$key" && ( "$value" == previous || "$value" == next ) ]] || fail "step needs a setting and previous or next" ;;
   # For the shell completion: the setting names, or the values one takes.
   __keys) jq -rn "$definitions"'{owner: {__typename: "Organization"}, repositoryTopics: {nodes: []}, visibility: "PUBLIC"} | settings[].key'; exit 0 ;;
   __values) jq -rn --arg key "$key" "$definitions"'{owner: {__typename: "Organization"}, repositoryTopics: {nodes: []}, visibility: "PUBLIC"}
@@ -300,6 +303,13 @@ set_setting() {
   require_admin
   local new
   new="$(normalize_value "$value")"
+  change_to "$new"
+}
+
+# Usage: change_to new-value
+# Applies the value unless it is the current one; the visibility asks first, unless --yes.
+change_to() {
+  local new="$1"
   if [[ "$new" == "$current" ]]; then
     echo "$label is already ${new:-empty}."
     return
@@ -310,6 +320,29 @@ set_setting() {
     confirm "Make $repo $new? $(visibility_warning "$new")" || exit 0
   fi
   apply_setting "$new"
+}
+
+# Moves the setting to its previous or next value: a switch flips, a choice steps without wrapping.
+step_setting() {
+  read_setting "$key"
+  require_admin
+  local new
+  new="$(stepped_value)"
+  change_to "$new"
+}
+
+stepped_value() {
+  case "$kind" in
+    switch) [[ "$current" == on ]] && echo off || echo on ;;
+    choice)
+      jq -rn --arg current "$current" --arg direction "$value" --arg choices "$choices" '
+        ($choices | split(" ")) as $all
+        | ($all | index($current) // 0) as $at
+        | (if $direction == "next" then $at + 1 else $at - 1 end) as $to
+        | $all[[0, ([$to, ($all | length) - 1] | min)] | max]'
+      ;;
+    *) fail "$label is not a switch or a choice; Enter changes it" ;;
+  esac
 }
 
 visibility_warning() {
@@ -341,18 +374,22 @@ change_setting() {
       new="$(IFS=$'\n'; choose "$label" "$current" $branches)" || return 0
       question="Make $new the default branch of $repo?"
       ;;
-    *)
-      new="$(ask "$label" "$current")" || return 0
-      new="$(normalize_value "$new")"
-      question="Set $label to \"$new\" for $repo?"
-      if [[ -z "$new" ]]; then question="Clear the $label of $repo?"; fi
-      ;;
+    *) edit_text; return ;;
   esac
   [[ "$new" != "$current" ]] || return 0
   if confirm "$question"; then
     apply_setting "$new" || true
     pause
   fi
+}
+
+# Edits a text setting in a box; Enter saves it at once, Esc cancels.
+edit_text() {
+  local new
+  new="$(edit_box "$label" "$current")" || return 0
+  new="$(normalize_value "$new")"
+  [[ "$new" != "$current" ]] || return 0
+  apply_setting "$new" >/dev/null || pause
 }
 
 # The fzf preview: the setting, its value, what it does and how to change it from a script.
@@ -369,7 +406,7 @@ show_setting() {
       (.help | [scan(".{1,\($width - 2)}(?:\\s|$)") | " " + rtrimstr(" ")][]),
       "",
       (if .choices then " Values: " + (.choices | join(", ")) else empty end),
-      (" Enter changes it. From a script:" | dim),
+      ((if .choices then " ← → or Enter change it." else " Enter edits it." end) + " From a script:" | dim),
       .value as $value
       | (" ghs settings set \(.key) \(.choices // [] | map(select(. != $value)) | .[0] // "value") -R \($repo)" | dim)
   ' <<<"$item"
@@ -379,6 +416,7 @@ fetch_settings
 case "$verb" in
   set) set_setting ;;
   change) change_setting ;;
+  step) step_setting ;;
   show) show_setting ;;
   *) show_table setting "$program" --arg repo "$repo" <<<"$item" ;;
 esac
