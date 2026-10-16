@@ -140,7 +140,8 @@ check_shared_options() {
 # Usage: cached_gh title gh-arguments…
 # Runs gh behind the spinner. Its output is kept for GHS_CACHE_TTL seconds (default 300) and reused
 # unless --refresh is given; failures are never kept. When GitHub can't be reached, or with
-# --offline, an older answer is shown instead, up to GHS_CACHE_KEEP old.
+# --offline, an older answer is shown instead, up to GHS_CACHE_KEEP old. gh's errors go to stderr,
+# or into the file named by gh_errors when it is set, for a caller that reads them.
 cached_gh() {
   local title="$1"
   shift
@@ -161,7 +162,7 @@ cached_gh() {
     rm -f "$errors"
     return
   fi
-  cat "$errors" >&2
+  if [[ -n "${gh_errors:-}" ]]; then cat "$errors" >"$gh_errors"; else cat "$errors" >&2; fi
   rm -f "$errors"
   [[ "$status" -eq 0 ]] || return "$status"
   store_cached "$file" "$output"
@@ -273,7 +274,7 @@ file_age() {
 # Usage: show_table kind program [jq options…] <json
 # Prints a table program's output the way the shared options ask: the framed or plain table,
 # --format json or csv, the fzf list (--list-width) or the fzf browse (-i). kind is the browse
-# kind: issue, pr, run, release, setting, ruleset, label, or notification and secret (whose rows each
+# kind: issue, pr, run, release, setting, ruleset, label, alert, or notification and secret (whose rows each
 # name their own kind).
 show_table() {
   local kind="$1" program="$2"
@@ -325,6 +326,7 @@ browse() {
     ruleset) key_actions=(alt-e:active:1 alt-v:evaluate:1 alt-x:disabled:1) ;;
     secret) key_actions=(enter:change:1 alt-n:new-secret:1 alt-v:new-variable:1 alt-x:delete:1) ;;
     label) key_actions=(alt-n:new:1 alt-e:change:1 alt-x:delete:1) ;;
+    alert) key_actions=(alt-d:dismiss:1 alt-r:reopen:1) ;;
   esac
   for key_action in ${key_actions[@]+"${key_actions[@]}"}; do
     name="${key_action#*:}"
@@ -362,6 +364,7 @@ browse_title() {
     ruleset) echo "Rules · $repo" ;;
     secret) echo "Secrets and variables · $repo" ;;
     label) echo "Labels · $repo" ;;
+    alert) echo "Security · $repo" ;;
   esac
 }
 
@@ -369,6 +372,7 @@ browse_help() {
   local enter="enter view"
   case "$1" in
     setting | secret) enter="enter change" ;;
+    alert) enter="enter browser" ;;
     label) enter="enter issues" ;;
   esac
   echo "$enter · ctrl-o browser · ctrl-r reload · esc quit"
@@ -381,6 +385,7 @@ browse_help() {
     ruleset) echo "alt-e enforce · alt-v evaluate only · alt-x disable" ;;
     secret) echo "alt-n new secret · alt-v new variable · alt-x delete" ;;
     label) echo "alt-n new · alt-e edit · alt-x delete" ;;
+    alert) echo "alt-d dismiss · alt-r reopen" ;;
   esac
 }
 
