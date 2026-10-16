@@ -78,6 +78,26 @@ checkout() {
   pause
 }
 
+# Run by fzf's transform on the left and right arrows: steps the setting in place, then prints the
+# fzf actions that reload the list and say what happened. The visibility asks first, full screen.
+step_setting() {
+  if is_offline; then
+    echo "change-footer:Offline: nothing can be changed on GitHub."
+  elif [[ "$id" == visibility ]]; then
+    printf 'execute[%q confirm-%s %s %q %q]+reload[%s]\n' "$0" "$action" "$kind" "$repo" "$id" "$GHS_RELOAD"
+  else
+    local outcome status=0
+    outcome="$("$BIN_DIR/settings.sh" step "$id" "$action" -R "$repo" </dev/null 2>&1)" || status=$?
+    outcome="$(tail -n 1 <<<"$outcome" | tr -d '~')"
+    # The footer changes first: fzf drops actions queued behind a tracked reload.
+    if [[ "$status" -eq 0 ]]; then
+      printf 'change-footer~%s~+reload[%s]\n' "$outcome" "$GHS_RELOAD"
+    else
+      printf 'change-footer:%s\n' "${outcome#settings: }"
+    fi
+  fi
+}
+
 # The header and an empty list have no item.
 [[ -n "$kind" ]] || exit 0
 case "$kind:$action" in
@@ -96,6 +116,13 @@ case "$kind:$action" in
   run:watch) interactive gh run watch "$id" -R "$repo" ;;
   *:read) gh api -X PATCH "notifications/threads/$extra" --silent ;;
   setting:change) "$BIN_DIR/settings.sh" change "$id" -R "$repo" ;;
+  setting:previous | setting:next) step_setting ;;
+  setting:confirm-previous | setting:confirm-next)
+    clear_screen
+    refuse_offline && exit 0
+    "$BIN_DIR/settings.sh" step "$id" "${action#confirm-}" -R "$repo" </dev/tty >/dev/tty || true
+    pause
+    ;;
   ruleset:active | ruleset:evaluate | ruleset:disabled) "$SETTINGS_DIR/rules.sh" change "$id" "$action" -R "$repo" ;;
   branch-rule:active | branch-rule:evaluate | branch-rule:disabled)
     clear_screen

@@ -340,10 +340,16 @@ browse() {
       binds+=(--bind "${key_action%%:*}:execute[$action $name $item_keys]")
     fi
   done
-  fzf --ansi --header-lines 1 --delimiter '\t' --with-nth 5.. --layout reverse --info inline-right \
+  local extra_options=()
+  if [[ "$kind" == setting ]]; then
+    # The arrows step the setting in place, so the cursor follows its row through the reload.
+    binds+=(--bind "left:transform:$action previous $keys" --bind "right:transform:$action next $keys")
+    extra_options=(--track --id-nth 3 --footer ' ')
+  fi
+  GHS_RELOAD="$reload" fzf --ansi --header-lines 1 --delimiter '\t' --with-nth 5.. --layout reverse --info inline-right \
     --tiebreak index --border rounded --border-label " $(browse_title "$kind") " \
     --header "$(browse_help "$kind")" \
-    --preview "$action preview $keys" --preview-window "$window" "${binds[@]}" \
+    --preview "$action preview $keys" --preview-window "$window" "${binds[@]}" ${extra_options[@]+"${extra_options[@]}"} \
     || { local status=$?; [[ "$status" -eq 130 ]] || return "$status"; }
 }
 
@@ -375,6 +381,7 @@ browse_help() {
     pr) echo "alt-k check out · alt-a approve · alt-m merge · alt-c comment" ;;
     run) echo "alt-r re-run failed · alt-l failed logs · alt-w watch" ;;
     notification) echo "alt-d mark as read" ;;
+    setting) echo "← → flip a switch or step through the choices" ;;
     ruleset) echo "alt-e enforce · alt-v evaluate only · alt-x disable" ;;
     secret) echo "alt-n new secret · alt-v new variable · alt-x delete" ;;
     label) echo "alt-n new · alt-e edit · alt-x delete" ;;

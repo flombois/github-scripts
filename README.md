@@ -192,8 +192,8 @@ the list; changes ask for confirmation first:
 | pr       | alt-k check out (in a clone of the repository) · alt-a approve · alt-m merge (gh asks how) · alt-c comment |
 | actions  | alt-r re-run failed jobs · alt-l failed logs · alt-w watch |
 | notifications | alt-d mark as read (Enter shows a pull request or issue; other threads open in the browser) |
+| settings | ← → flip a switch or step through a choice in place; Enter changes a setting (a text one in an edit box: Enter saves, Esc cancels); the subcommands' keys are under [Settings](#settings) |
 | security | Enter or ctrl-o opens the alert on GitHub · alt-d dismiss (asks why) · alt-r reopen |
-| settings | Enter changes a setting; the subcommands' keys are under [Settings](#settings) |
 
 `ghs security` lists the open Dependabot, code scanning and secret scanning alerts, most severe
 first (`-s closed` or `all`, `-k dependabot|code|secret`, `--severity high` for high and critical).
@@ -231,8 +231,10 @@ frames, spinner or clipping.
 ## Settings
 
 `ghs settings` lists a repository's general, feature and pull request settings. Change one with
-`set`, or with `-i`, where Enter on a setting asks for its new value. Changes need admin access,
-and each one is confirmed in `-i`:
+`set`, or with `-i`: the left and right arrows flip a switch or step to the previous or next choice
+right in the list, and Enter asks for a new value (text settings open an edit box holding the current
+value). Changes need admin access; in `-i`, the visibility and Enter's switch and choice changes are
+confirmed first:
 
 ```sh
 ghs settings
