@@ -78,28 +78,192 @@ checkout() {
   pause
 }
 
-# Run by fzf's transform on the left and right arrows: steps the setting in place, then prints the
-# fzf actions that reload the list and say what happened. The visibility asks first, full screen.
-step_setting() {
-  if is_offline; then
-    echo "change-footer:Offline: nothing can be changed on GitHub."
-  elif [[ "$id" == visibility ]]; then
-    printf 'execute[%q confirm-%s %s %q %q]+reload[%s]\n' "$0" "$action" "$kind" "$repo" "$id" "$GHS_RELOAD"
+# Settings edit in the preview pane. Enter, Esc and the arrows run as fzf transforms, which print the
+# actions to take. Enter opens the editor; there the arrows pick a value (text settings take typing in
+# the search line), Enter saves it in the background and Esc cancels. GHS_BROWSE_STATE holds the
+# open editor (edit, choices, draft, confirm) and the values being saved (saving/<key>), whose rows
+# the list greys out and locks until GitHub answers.
+STATE_DIR="${GHS_BROWSE_STATE:-}"
+LIST_KEYS='up,down,ctrl-j,ctrl-k,ctrl-n,ctrl-p,page-up,page-down,tab,btab,ctrl-r,ctrl-o,left-click,double-click,scroll-up,scroll-down'
+
+setting_enter() {
+  if is_editing; then
+    save_draft
   else
-    local outcome status=0
-    outcome="$("$BIN_DIR/settings.sh" step "$id" "$action" -R "$repo" </dev/null 2>&1)" || status=$?
-    outcome="$(tail -n 1 <<<"$outcome" | tr -d '~')"
-    # The footer changes first: fzf drops actions queued behind a tracked reload.
-    if [[ "$status" -eq 0 ]]; then
-      printf 'change-footer~%s~+reload[%s]\n' "$outcome" "$GHS_RELOAD"
-    else
-      printf 'change-footer:%s\n' "${outcome#settings: }"
-    fi
+    open_editor
   fi
 }
 
-# The header and an empty list have no item.
-[[ -n "$kind" ]] || exit 0
+is_editing() {
+  [[ -f "$STATE_DIR/edit" ]]
+}
+
+open_editor() {
+  if is_offline; then
+    footer "Offline: nothing can be changed on GitHub."
+  elif [[ -f "$STATE_DIR/saving/$id" ]]; then
+    footer "Still saving: wait for GitHub to answer."
+  else
+    local errors fields
+    errors="$(mktemp)"
+    if fields="$("$BIN_DIR/settings.sh" editable "$id" -R "$repo" </dev/null 2>"$errors")"; then
+      start_editing "$fields"
+    else
+      footer "$(tail -n 1 "$errors" | sed 's/^settings: //')"
+    fi
+    rm -f "$errors"
+  fi
+}
+
+# Usage: start_editing fields — the output of settings.sh editable.
+start_editing() {
+  local kind label current
+  IFS=$'\x1f' read -r kind label current <<<"${1%%$'\n'*}"
+  printf '%s\x1f%s\x1f%s\x1f%s\n' "$kind" "$label" "$current" "${FZF_QUERY:-}" >"$STATE_DIR/edit"
+  local actions
+  actions="unbind($LIST_KEYS)+disable-search+$(fzf_action change-preview "$(self) edit-preview {1} {2} {3} {4}")"
+  actions+="+$(fzf_action change-preview-window "$(focused_window)")"
+  actions+="+$(fzf_action change-preview-label " $(printf '\033[1;36m')Editing · $label$(printf '\033[0m') ")"
+  if is_text "$kind"; then
+    # The pane follows the typing, from the current value on.
+    actions+="+rebind(change)+$(fzf_action change-query "$current")+$(fzf_action change-prompt "$label › ")"
+    actions+="+$(fzf_action change-footer "enter save · esc cancel")"
+  else
+    tail -n +2 <<<"$1" >"$STATE_DIR/choices"
+    printf '%s' "$current" >"$STATE_DIR/draft"
+    actions+="+hide-input+$(fzf_action change-footer "← → pick · enter save · esc cancel")"
+  fi
+  echo "$actions"
+}
+
+# Text settings are typed in the search line; the others pick from their values.
+is_text() {
+  [[ "$1" == text || "$1" == topics ]]
+}
+
+# The preview window with a bold border, to show the editor has the focus.
+focused_window() {
+  echo "${GHS_PREVIEW_WINDOW%,border-*},border-bold"
+}
+
+# Saves a changed draft: the row greys out at once, and the request runs in the background.
+save_draft() {
+  local kind label current query draft
+  IFS=$'\x1f' read -r kind label current query <"$STATE_DIR/edit"
+  draft="$(draft_value "$kind")"
+  if [[ "$draft" == "$current" ]]; then
+    echo "$(stop_editing "$query")+change-footer( )"
+  elif [[ "$id" == visibility && "$(cat "$STATE_DIR/confirm" 2>/dev/null)" != "$draft" ]]; then
+    printf '%s' "$draft" >"$STATE_DIR/confirm"
+    footer "Enter again to make $repo $draft."
+  else
+    printf '%s' "$draft" >"$STATE_DIR/saving/$id"
+    # The footer and the save come first: fzf drops actions queued behind a tracked reload.
+    printf '%s+%s+%s+%s\n' "$(stop_editing "$query")" "$(fzf_action change-footer "Saving ${label}…")" \
+      "$(fzf_action bg-transform "$(self) save {1} {2} {3} {4}")" "$(fzf_action reload "$GHS_RELOAD")"
+  fi
+}
+
+# Usage: draft_value kind
+draft_value() {
+  if is_text "$1"; then
+    printf '%s' "${FZF_QUERY:-}"
+  else
+    cat "$STATE_DIR/draft"
+  fi
+}
+
+# Usage: stop_editing query — prints the actions that give the list back, with its earlier search.
+stop_editing() {
+  rm -f "$STATE_DIR/edit" "$STATE_DIR/choices" "$STATE_DIR/draft" "$STATE_DIR/confirm"
+  printf '%s' "rebind($LIST_KEYS)+unbind(change)+enable-search+show-input+change-prompt(> )" \
+    "+$(fzf_action change-query "$1")+beginning-of-line+end-of-line" \
+    "+$(fzf_action change-preview "$(self) preview {1} {2} {3} {4}")" \
+    "+$(fzf_action change-preview-window "$GHS_PREVIEW_WINDOW")+change-preview-label( )"
+}
+
+setting_esc() {
+  if is_editing; then
+    local query
+    query="$(cut -d $'\x1f' -f 4 "$STATE_DIR/edit")"
+    echo "$(stop_editing "$query")+change-footer( )"
+  else
+    echo abort
+  fi
+}
+
+# Usage: setting_arrow left|right — picks the previous or next value in the editor; elsewhere the
+# arrows move along the search line.
+setting_arrow() {
+  local kind
+  if is_editing && kind="$(cut -d $'\x1f' -f 1 "$STATE_DIR/edit")" && ! is_text "$kind"; then
+    step_draft "$1" "$kind"
+  elif [[ "$1" == left ]]; then
+    echo backward-char
+  else
+    echo forward-char
+  fi
+}
+
+# Usage: step_draft left|right kind — a switch flips, the other values step without wrapping.
+step_draft() {
+  jq -Rrn --arg draft "$(cat "$STATE_DIR/draft")" --arg direction "$1" --arg kind "$2" '
+    [inputs] as $values
+    | ($values | index($draft) // 0) as $at
+    | if $kind == "switch" then $values[1 - $at]
+      else (if $direction == "right" then $at + 1 else $at - 1 end) as $to
+        | $values[[0, ([$to, ($values | length) - 1] | min)] | max] end
+  ' <"$STATE_DIR/choices" | tr -d '\n' >"$STATE_DIR/draft.next"
+  mv "$STATE_DIR/draft.next" "$STATE_DIR/draft"
+  rm -f "$STATE_DIR/confirm"
+  echo refresh-preview
+}
+
+edit_preview() {
+  local kind
+  kind="$(cut -d $'\x1f' -f 1 "$STATE_DIR/edit" 2>/dev/null)" || return 0
+  COLUMNS="$FZF_PREVIEW_COLUMNS" "$BIN_DIR/settings.sh" editor -R "$repo" -- "$id" "$(draft_value "$kind")"
+}
+
+# Run by bg-transform: sends the value, unlocks the row and reloads the list with the outcome.
+save_setting() {
+  local marker="$STATE_DIR/saving/$id" outcome status=0
+  outcome="$("$BIN_DIR/settings.sh" set --yes -R "$repo" -- "$id" "$(cat "$marker")" </dev/null 2>&1)" || status=$?
+  rm -f "$marker"
+  outcome="$(tail -n 1 <<<"$outcome")"
+  if [[ "$status" -ne 0 ]]; then outcome="✗ ${outcome#settings: }"; fi
+  echo "$(fzf_action change-footer "$outcome")+$(fzf_action reload "$GHS_RELOAD")"
+}
+
+footer() {
+  fzf_action change-footer "$1"
+  echo
+}
+
+# Usage: fzf_action name argument — the action with its argument between delimiters it doesn't hold.
+fzf_action() {
+  local pair
+  for pair in '()' '[]' '{}' '<>' '~~' '!!' '@@' '##' '%%' '^^' '&&' '**' ';;' '//' '||' '::'; do
+    if [[ "$2" != *"${pair:1:1}"* ]]; then
+      printf '%s%s%s%s' "$1" "${pair:0:1}" "$2" "${pair:1:1}"
+      return
+    fi
+  done
+}
+
+self() {
+  printf %q "$0"
+}
+
+# The header and an empty list have no item; Esc still quits and the arrows move along the search line.
+if [[ -z "$kind" ]]; then
+  case "$action" in
+    esc) echo abort ;;
+    left) echo backward-char ;;
+    right) echo forward-char ;;
+  esac
+  exit 0
+fi
 case "$kind:$action" in
   *:preview) preview ;;
   *:view) view ;;
@@ -115,14 +279,11 @@ case "$kind:$action" in
   run:logs) gh run view "$id" -R "$repo" --log-failed | less -RF ;;
   run:watch) interactive gh run watch "$id" -R "$repo" ;;
   *:read) gh api -X PATCH "notifications/threads/$extra" --silent ;;
-  setting:change) "$BIN_DIR/settings.sh" change "$id" -R "$repo" ;;
-  setting:previous | setting:next) step_setting ;;
-  setting:confirm-previous | setting:confirm-next)
-    clear_screen
-    refuse_offline && exit 0
-    "$BIN_DIR/settings.sh" step "$id" "${action#confirm-}" -R "$repo" </dev/tty >/dev/tty || true
-    pause
-    ;;
+  setting:enter) setting_enter ;;
+  setting:esc) setting_esc ;;
+  setting:left | setting:right) setting_arrow "$action" ;;
+  setting:edit-preview) edit_preview ;;
+  setting:save) save_setting ;;
   ruleset:active | ruleset:evaluate | ruleset:disabled) "$SETTINGS_DIR/rules.sh" change "$id" "$action" -R "$repo" ;;
   branch-rule:active | branch-rule:evaluate | branch-rule:disabled)
     clear_screen

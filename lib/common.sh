@@ -308,9 +308,12 @@ browse() {
   action="$(printf %q "$LIB_DIR/browse.sh")"
   reload="$(printf %q "$(realpath "$0")")"
   for argument in ${script_args[@]+"${script_args[@]}"}; do
-    reload+=" $(printf %q "$argument")"
+    [[ "$argument" == --refresh ]] || reload+=" $(printf %q "$argument")"
   done
-  reload+=" --refresh --list-width $(browse_list_width "$width")"
+  reload+=" --list-width $(browse_list_width "$width")"
+  # ctrl-r fetches again; the settings reload after a change reads the cache, which the change cleared.
+  local cached_reload="$reload"
+  reload+=" --refresh"
   local keys='{1} {2} {3} {4}'
   local binds=(--bind "enter:execute:$action view $keys" --bind "ctrl-o:execute-silent:$action open $keys"
     --bind "ctrl-r:reload:$reload")
@@ -322,7 +325,6 @@ browse() {
     pr) key_actions=(alt-k:checkout:0 alt-a:approve:1 alt-m:merge:1 alt-c:comment:1) ;;
     run) key_actions=(alt-r:rerun:1 alt-l:logs:0 alt-w:watch:1) ;;
     notification) key_actions=(alt-d:read:1) ;;
-    setting) key_actions=(enter:change:1) ;;
     ruleset) key_actions=(alt-e:active:1 alt-v:evaluate:1 alt-x:disabled:1) ;;
     secret) key_actions=(enter:change:1 alt-n:new-secret:1 alt-v:new-variable:1 alt-x:delete:1) ;;
     label) key_actions=(alt-n:new:1 alt-e:change:1 alt-x:delete:1) ;;
@@ -340,17 +342,26 @@ browse() {
       binds+=(--bind "${key_action%%:*}:execute[$action $name $item_keys]")
     fi
   done
-  local extra_options=()
+  local extra_options=() state=''
   if [[ "$kind" == setting ]]; then
-    # The arrows step the setting in place, so the cursor follows its row through the reload.
-    binds+=(--bind "left:transform:$action previous $keys" --bind "right:transform:$action next $keys")
+    # Enter edits the row in the preview pane (see lib/browse.sh); the cursor follows its row through
+    # the reloads.
+    binds+=(--bind "enter:transform:$action enter $keys" --bind "esc:transform:$action esc $keys"
+      --bind "left:transform:$action left $keys" --bind "right:transform:$action right $keys"
+      --bind "start:unbind(change)" --bind "change:refresh-preview")
     extra_options=(--track --id-nth 3 --footer ' ')
+    state="$(mktemp -d)"
+    mkdir "$state/saving"
   fi
-  GHS_RELOAD="$reload" fzf --ansi --header-lines 1 --delimiter '\t' --with-nth 5.. --layout reverse --info inline-right \
+  local status=0
+  GHS_RELOAD="$cached_reload" GHS_BROWSE_STATE="$state" GHS_PREVIEW_WINDOW="$window" \
+    fzf --ansi --header-lines 1 --delimiter '\t' --with-nth 5.. --layout reverse --info inline-right \
     --tiebreak index --border rounded --border-label " $(browse_title "$kind") " \
     --header "$(browse_help "$kind")" \
     --preview "$action preview $keys" --preview-window "$window" "${binds[@]}" ${extra_options[@]+"${extra_options[@]}"} \
-    || { local status=$?; [[ "$status" -eq 130 ]] || return "$status"; }
+    || status=$?
+  [[ -z "$state" ]] || rm -rf "$state"
+  [[ "$status" -eq 0 || "$status" -eq 130 ]] || return "$status"
 }
 
 browse_title() {
@@ -371,7 +382,8 @@ browse_title() {
 browse_help() {
   local enter="enter view"
   case "$1" in
-    setting | secret) enter="enter change" ;;
+    setting) enter="enter edit" ;;
+    secret) enter="enter change" ;;
     alert) enter="enter browser" ;;
     label) enter="enter issues" ;;
   esac
@@ -381,7 +393,7 @@ browse_help() {
     pr) echo "alt-k check out · alt-a approve · alt-m merge · alt-c comment" ;;
     run) echo "alt-r re-run failed · alt-l failed logs · alt-w watch" ;;
     notification) echo "alt-d mark as read" ;;
-    setting) echo "← → flip a switch or step through the choices" ;;
+    setting) echo "editing: ← → pick a value · enter save · esc cancel" ;;
     ruleset) echo "alt-e enforce · alt-v evaluate only · alt-x disable" ;;
     secret) echo "alt-n new secret · alt-v new variable · alt-x delete" ;;
     label) echo "alt-n new · alt-e edit · alt-x delete" ;;

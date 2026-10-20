@@ -192,7 +192,7 @@ the list; changes ask for confirmation first:
 | pr       | alt-k check out (in a clone of the repository) · alt-a approve · alt-m merge (gh asks how) · alt-c comment |
 | actions  | alt-r re-run failed jobs · alt-l failed logs · alt-w watch |
 | notifications | alt-d mark as read (Enter shows a pull request or issue; other threads open in the browser) |
-| settings | ← → flip a switch or step through a choice in place; Enter changes a setting (a text one in an edit box: Enter saves, Esc cancels); the subcommands' keys are under [Settings](#settings) |
+| settings | Enter edits a setting in the preview pane: ← → pick a value (or type a text one), Enter saves, Esc cancels; the row is greyed out until GitHub answers; the subcommands' keys are under [Settings](#settings) |
 | security | Enter or ctrl-o opens the alert on GitHub · alt-d dismiss (asks why) · alt-r reopen |
 
 `ghs security` lists the open Dependabot, code scanning and secret scanning alerts, most severe
@@ -231,10 +231,11 @@ frames, spinner or clipping.
 ## Settings
 
 `ghs settings` lists a repository's general, feature and pull request settings. Change one with
-`set`, or with `-i`: the left and right arrows flip a switch or step to the previous or next choice
-right in the list, and Enter asks for a new value (text settings open an edit box holding the current
-value). Changes need admin access; in `-i`, the visibility and Enter's switch and choice changes are
-confirmed first:
+`set`, or with `-i`: Enter edits the setting under the cursor in the preview pane. There the left
+and right arrows pick a value (text settings take typing in the search line, and the pane shows the
+value as you type), Enter saves it and Esc cancels. Nothing is sent before that second Enter; the
+visibility asks for a third. While GitHub answers, the row is greyed out and locked, and the other
+rows stay free to edit. Changes need admin access:
 
 ```sh
 ghs settings

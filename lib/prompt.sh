@@ -39,23 +39,6 @@ ask() {
   fi
 }
 
-# Usage: edit_box title current
-# Prints the value edited in a box centred on the screen; Enter saves it, Esc cancels and fails.
-edit_box() {
-  local size rows columns output status=0
-  size="$(stty size </dev/tty 2>/dev/null || echo "24 80")"
-  rows="${size% *}"
-  columns="${size#* }"
-  local top=$(((rows - 5) / 2)) side=$(((columns - 72) / 2))
-  [[ "$top" -ge 0 ]] || top=0
-  [[ "$side" -ge 2 ]] || side=2
-  output="$(fzf --disabled --print-query --query "$2" --prompt '> ' --no-info --layout reverse \
-    --margin "$top,$side" --border rounded --border-label " $1 " --header 'enter save · esc cancel' \
-    --no-separator </dev/null)" || status=$?
-  [[ "$status" -ne 130 ]] || return 1
-  printf '%s\n' "${output%%$'\n'*}"
-}
-
 # Prints a value typed without echo, such as a secret.
 ask_hidden() {
   if command -v gum >/dev/null; then

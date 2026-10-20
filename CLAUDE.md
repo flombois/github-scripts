@@ -79,13 +79,26 @@ pass the Markdown to glow 3 (`render_markdown`) and `page` the whole view throug
   (`settings __keys`, `__values`) all read it, so a new setting is one entry there.
 - **After a write:** call `forget_cached` with the same gh arguments as the read, so the next view
   fetches again.
-- **Browse:** a kind's `key_actions` can rebind `enter` (settings and secrets change the value). Actions
-  named `new…` get the kind and repository instead of the row's keys, so they work on an empty list.
-  Settings also bind left/right to `transform` (`browse.sh previous|next` → `settings.sh step`): it
-  writes, then prints `change-footer~…~+reload[$GHS_RELOAD]`, with `--track --id-nth 3` keeping the
-  cursor. The footer must come first: fzf drops actions queued after a tracked reload. Visibility
-  instead returns an `execute` that confirms. Text settings edit in `edit_box` (prompt.sh), a
-  centred fzf with `--disabled --print-query`.
+- **Browse:** a kind's `key_actions` can rebind `enter` (secrets change the value). Actions named
+  `new…` get the kind and repository instead of the row's keys, so they work on an empty list.
+- **Settings editor:** `ghs settings -i` edits in the preview pane. Enter, Esc and ←/→ are fzf
+  `transform`s (`browse.sh enter|esc|left|right`) that print the actions to take.
+  - **Opening:** Enter runs `settings.sh editable` (admin check, kind, label, value, choices), then
+    `unbind`s the list keys, `disable-search`es, and swaps the preview to `browse.sh edit-preview`
+    (→ `settings.sh editor`) with a bold border and label.
+  - **Text** settings type in the search line, with `rebind(change)` refreshing the pane. Other kinds
+    `hide-input` and keep the draft in a file, since `$FZF_QUERY` is empty while the input is hidden.
+  - **State:** `browse()` makes a per-session `GHS_BROWSE_STATE` directory: `edit` (kind, label,
+    value, earlier search), `choices`, `draft`, `confirm` (visibility's extra Enter), and
+    `saving/<key>`.
+  - **Saving:** the second Enter writes `saving/<key>` and prints the leave actions, the footer,
+    `bg-transform[browse.sh save]` (→ `settings.sh set --yes`), then `reload[$GHS_RELOAD]`. That
+    reload reads the cache, so the row greys out at once: `settings.sh` passes `saving/*` to the
+    table as `--argjson saving`. The footer and the save must come before the reload: fzf drops
+    actions queued after a tracked reload (`--track --id-nth 3` keeps the cursor). A saving row
+    ignores Enter until the background save prints its outcome and reloads.
+  - **Arguments:** fzf action arguments go through `fzf_action`, which picks delimiters the text
+    doesn't hold. Values reach `settings.sh` after `--`, so they may start with a dash.
 - **Fetching:** GraphQL can't read where an inherited ruleset comes from, so `rules.sh` merges in the
   REST ruleset list.
 
